@@ -11,7 +11,8 @@ export default defineConfig({
       reporter: ["text-summary", "lcov"],
       // Only logic-bearing code is measured. Pages and layouts are markup and
       // are covered by manual/integration checks instead.
-      include: ["lib/**/*.ts", "config/**/*.ts", "middleware.ts"],
+      include: ["lib/**/*.ts", "config/**/*.ts"],
+      // middleware.ts is glue over decideAccess, which is tested directly.
       exclude: ["**/*.test.ts", "**/types.ts"],
       // A backstop for the TDD rule, not a substitute for it — see CLAUDE.md.
       thresholds: {

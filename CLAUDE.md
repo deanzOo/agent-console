@@ -176,8 +176,34 @@ questions without grepping the whole tree.
 
 ## Writing style
 
-- Zero narrative comments. Comment only for a real doc-comment on a public API, or when following the code
-  is genuinely unclear — one line, and say _why_, not _what_.
+### Comments are a last resort
+
+Assume a comment is a defect until proven otherwise. In ~99% of cases expressive names and small functions
+carry the meaning, and a comment is a sign the code should have been clearer instead. Rewrite first.
+
+Write one only when the _why_ is genuinely unrecoverable from the code — a non-obvious constraint, a
+workaround for external behaviour, a security reason a check exists. Keep it to one line. Never narrate what
+the next line does, restate a signature, or label a section.
+
+```ts
+// no — the code already says this
+// Read the cookie header and split it
+const header = request.headers.get("cookie");
+
+// yes — the constraint is invisible in the code
+// timingSafeEqual throws on a length mismatch, so reject short input first.
+```
+
+No file-header block comments, no banner separators, no TSDoc on internal functions.
+
+### File size
+
+Hard cap of **300 lines** per source file (blank lines and comments excluded), enforced by ESLint's
+`max-lines`. Tests get 500 — enumerating cases is their job. 300 is ESLint's own default and where most
+style guides land; a file past it is doing more than one job, so split it rather than raising the cap.
+
+### General
+
 - Match the surrounding code: its naming, its idiom, its comment density.
 - Build what the task needs now. No speculative abstraction, no config for a value that never changes, no
   interface with one implementation.

@@ -89,6 +89,29 @@ describe("parseEnv", () => {
     });
   });
 
+  describe("password mode", () => {
+    it("requires a session secret, since middleware cannot reach the database", () => {
+      expect(() => parse({ AUTH_MODE: "password" })).toThrowError(/SESSION_SECRET/);
+    });
+
+    it("rejects a session secret too short to be worth signing with", () => {
+      expect(() =>
+        parse({ AUTH_MODE: "password", SESSION_SECRET: "short" }),
+      ).toThrowError(/SESSION_SECRET/);
+    });
+
+    it("accepts a sufficiently long secret", () => {
+      const secret = "a".repeat(32);
+      expect(
+        parse({ AUTH_MODE: "password", SESSION_SECRET: secret }).sessionSecret,
+      ).toBe(secret);
+    });
+
+    it("does not require a session secret in other modes", () => {
+      expect(parse().sessionSecret).toBeUndefined();
+    });
+  });
+
   describe("trusted-network mode", () => {
     it("allows binding to loopback", () => {
       expect(parse({ HOST: "127.0.0.1" }).host).toBe("127.0.0.1");

@@ -9,6 +9,7 @@ export interface AppConfig {
   readonly authMode: AuthMode;
   readonly cfAccessTeamDomain: string | undefined;
   readonly cfAccessAud: string | undefined;
+  readonly sessionSecret: string | undefined;
   readonly dataDir: string;
   readonly workspaceRoot: string;
   readonly host: string;
@@ -41,6 +42,7 @@ const schema = z.object({
   AUTH_MODE: z.enum(AUTH_MODES).default("cloudflare-access"),
   CF_ACCESS_TEAM_DOMAIN: blankAsUndefined,
   CF_ACCESS_AUD: blankAsUndefined,
+  SESSION_SECRET: blankAsUndefined,
   DATA_DIR: blankAsUndefined,
   WORKSPACE_ROOT: blankAsUndefined,
   HOST: blankAsUndefined,
@@ -55,6 +57,7 @@ const schema = z.object({
 });
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
+const MIN_SESSION_SECRET_LENGTH = 32;
 
 function isLoopback(host: string): boolean {
   return LOOPBACK_HOSTS.has(host) || host.startsWith("127.");
@@ -97,21 +100,38 @@ export function parseEnv(
     );
   }
 
-  const missing: string[] = [];
   if (env.AUTH_MODE === "cloudflare-access") {
+    const missing: string[] = [];
     if (!env.CF_ACCESS_TEAM_DOMAIN) missing.push("CF_ACCESS_TEAM_DOMAIN");
     if (!env.CF_ACCESS_AUD) missing.push("CF_ACCESS_AUD");
+    if (missing.length > 0) {
+      throw new EnvError(
+        `AUTH_MODE=cloudflare-access requires:\n${missing.map((key) => `  ${key}`).join("\n")}\n\nSee .env.example.`,
+      );
+    }
   }
-  if (missing.length > 0) {
-    throw new EnvError(
-      `AUTH_MODE=cloudflare-access requires:\n${missing.map((key) => `  ${key}`).join("\n")}\n\nSee .env.example.`,
-    );
+
+  // Sessions are signed in middleware, which runs before the database is
+  // reachable — so unlike the other credentials this one cannot live in the
+  // settings table and be filled in from /setup.
+  if (env.AUTH_MODE === "password") {
+    if (!env.SESSION_SECRET) {
+      throw new EnvError(
+        "AUTH_MODE=password requires SESSION_SECRET.\nGenerate one with: openssl rand -hex 32",
+      );
+    }
+    if (env.SESSION_SECRET.length < MIN_SESSION_SECRET_LENGTH) {
+      throw new EnvError(
+        `SESSION_SECRET must be at least ${MIN_SESSION_SECRET_LENGTH} characters.\nGenerate one with: openssl rand -hex 32`,
+      );
+    }
   }
 
   return {
     authMode: env.AUTH_MODE,
     cfAccessTeamDomain: env.CF_ACCESS_TEAM_DOMAIN,
     cfAccessAud: env.CF_ACCESS_AUD,
+    sessionSecret: env.SESSION_SECRET,
     dataDir,
     workspaceRoot: env.WORKSPACE_ROOT ?? path.join(dataDir, "work"),
     host,
