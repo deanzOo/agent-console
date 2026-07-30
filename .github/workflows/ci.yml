@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      HUSKY: 0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Format
+        run: npm run format:check
+      - name: Duplication
+        run: npm run dupes
+      - name: Tests + coverage
+        run: npm run test:coverage
+      - name: Build
+        run: npm run build
+
+  # Configurability is a product requirement, so it needs a gate. This fails the
+  # build if a deployment-specific literal leaks out of .env.example and docs.
+  no-hardcoded-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for deployment-specific literals
+        run: bash scripts/check-no-hardcoded-config.sh

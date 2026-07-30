@@ -1,0 +1,6 @@
+node_modules/
+.next/
+.jscpd/
+CHANGELOG.md
+package-lock.json
+trivy-results.sarif

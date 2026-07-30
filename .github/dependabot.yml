@@ -1,0 +1,46 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: scope
+    groups:
+      # One PR per risk class instead of one per package — a wall of 20 patch
+      # PRs a week is how dependabot gets muted.
+      production-minor-patch:
+        dependency-type: production
+        update-types: [minor, patch]
+      development-minor-patch:
+        dependency-type: development
+        update-types: [minor, patch]
+    ignore:
+      # Majors land as their own PR (ungrouped) so each gets a real review.
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore"
+      include: scope
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore"
+      include: scope

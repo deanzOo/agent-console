@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+.jscpd/
+trivy-results.sarif
+*.tsbuildinfo
+next-env.d.ts
+
+# Local config and data — never committed
+.env
+.env.local
+data.db
+data.db-journal
+data.db-wal
+data.db-shm
+
+.DS_Store

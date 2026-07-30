@@ -1,0 +1,77 @@
+{
+  "name": "claudevps",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted control panel for Claude Code agents running on your own VPS",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "dupes": "jscpd",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "graph": "graphify .",
+    "graph:update": "graphify . --update",
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run dupes && npm run test:coverage",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "prettier --write",
+      "eslint --fix --max-warnings=0"
+    ],
+    "*.{json,md,yml,yaml,css}": [
+      "prettier --write"
+    ]
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.220",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "argon2": "^0.45.1",
+    "better-sqlite3": "^13.0.2",
+    "jose": "^6.2.5",
+    "next": "^16.2.12",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "web-push": "^3.6.7",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.1",
+    "@commitlint/config-conventional": "^21.2.0",
+    "@eslint/js": "^9.39.5",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^26.1.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@types/web-push": "^3.6.4",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.2.12",
+    "husky": "^9.1.7",
+    "jscpd": "^5.0.14",
+    "lint-staged": "^17.2.0",
+    "prettier": "^3.9.6",
+    "prettier-plugin-tailwindcss": "^0.8.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "brace-expansion": "^5.0.8",
+    "minimatch": "^10.2.6",
+    "postcss": "^8.5.25",
+    "sharp": "^0.35.3"
+  }
+}
