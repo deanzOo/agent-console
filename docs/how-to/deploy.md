@@ -1,12 +1,14 @@
 # Deploy to a server
 
-> **Status:** the app runs and authenticates; `deploy/install.sh`, the systemd unit, and the Docker image are
-> not written yet. Until they are, follow the manual steps below.
+> Prefer [Docker](docker.md) if you can — it contains the agent, which can otherwise run any command the
+> service user can. `deploy/install.sh` automates the steps below if you would rather use systemd.
 
 ## Prerequisites
 
 - A Linux host with Node 22+ and git. 2 vCPU / 8 GB is comfortable for a handful of concurrent missions.
-- An Anthropic credential on the host: `claude setup-token`, or `ANTHROPIC_API_KEY` in the environment.
+- An Anthropic credential. Run `claude setup-token` on any machine where you are logged in and put the
+  result in `CLAUDE_CODE_OAUTH_TOKEN` — this uses your Claude subscription rather than API billing.
+  `ANTHROPIC_API_KEY` works too, and a `claude` CLI already logged in on the host is a third option.
 - A dedicated unprivileged user. The agent can run arbitrary commands as whoever owns the process — do not
   make that root, and do not make it your own account.
 

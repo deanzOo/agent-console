@@ -16,6 +16,9 @@ export interface AppConfig {
   readonly port: number;
   readonly allowInsecure: boolean;
   readonly anthropicApiKey: string | undefined;
+  readonly claudeCodeOauthToken: string | undefined;
+  /** Either credential works; the CLI's own login is a third path we cannot see. */
+  readonly hasAnthropicCredential: boolean;
   readonly githubToken: string | undefined;
   readonly asanaToken: string | undefined;
 }
@@ -52,6 +55,7 @@ const schema = z.object({
   ),
   ALLOW_INSECURE: blankAsUndefined,
   ANTHROPIC_API_KEY: blankAsUndefined,
+  CLAUDE_CODE_OAUTH_TOKEN: blankAsUndefined,
   GITHUB_TOKEN: blankAsUndefined,
   ASANA_TOKEN: blankAsUndefined,
 });
@@ -138,6 +142,10 @@ export function parseEnv(
     port: env.PORT,
     allowInsecure,
     anthropicApiKey: env.ANTHROPIC_API_KEY,
+    claudeCodeOauthToken: env.CLAUDE_CODE_OAUTH_TOKEN,
+    hasAnthropicCredential: Boolean(
+      env.ANTHROPIC_API_KEY ?? env.CLAUDE_CODE_OAUTH_TOKEN,
+    ),
     githubToken: env.GITHUB_TOKEN,
     asanaToken: env.ASANA_TOKEN,
   };

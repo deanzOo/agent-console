@@ -15,7 +15,8 @@ config — clone it, add your own credentials, go.
 
 ## Quickstart
 
-Needs Node 22+, git, and an Anthropic credential (`claude setup-token`, or an API key).
+Needs Node 22+, git, and a Claude credential — run `claude setup-token` to use your subscription (no API
+key required).
 
 ```bash
 git clone <your-fork> agent-console && cd agent-console

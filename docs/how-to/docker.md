@@ -11,16 +11,31 @@ gap in the systemd deployment.
 
 ## Credentials
 
-Pick one.
+**Use your Claude subscription — no API key needed.** On any machine where you are already logged in:
 
-**An API key** — simplest, and the only option that works the same on every platform. Put
-`ANTHROPIC_API_KEY` in `.env`.
+```bash
+claude setup-token
+```
 
-**A mounted login** — if you ran `claude setup-token` on the host, `docker-compose.yml` already bind-mounts
-`~/.claude` into the container. Override the location with `CLAUDE_CONFIG_DIR` if yours differs.
+That prints a long-lived token. Put it in `.env`:
 
-> On macOS `claude setup-token` stores the credential in the Keychain, not in `~/.claude`, so the mount has
-> nothing to carry. Use the API key there.
+```bash
+CLAUDE_CODE_OAUTH_TOKEN=<the token>
+```
+
+The SDK passes it to the CLI it spawns, so the container authenticates as you without a credential file and
+without per-token API billing.
+
+Two alternatives, in descending order of convenience:
+
+- **`ANTHROPIC_API_KEY`** — billed per token. Works identically; use it if you would rather not tie the
+  server to your personal login.
+- **Mounting a host login** — uncomment the `~/.claude` bind mount in `docker-compose.yml`. Only worth it if
+  you already have a logged-in CLI on the host and do not want to mint a token. Note macOS keeps that
+  credential in the Keychain rather than on disk, so the mount carries nothing there.
+
+> The token is a credential for your account. It lives in `.env` (`chmod 600`) and in the container's
+> environment — treat the host as you would any machine holding your login.
 
 ## Start it
 

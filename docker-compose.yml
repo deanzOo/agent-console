@@ -15,9 +15,11 @@ services:
     volumes:
       - data:/data
       - workspace:/workspace
-      # Authenticate on the host with `claude setup-token`, or drop this and
-      # set ANTHROPIC_API_KEY in .env instead.
-      - ${CLAUDE_CONFIG_DIR:-~/.claude}:/home/agent/.claude
+      # Auth comes from CLAUDE_CODE_OAUTH_TOKEN in .env (see .env.example).
+      # Only mount the CLI's config directory if you want to reuse a host login
+      # instead — and note macOS keeps that credential in the Keychain, not on
+      # disk, so the mount carries nothing there.
+      # - ${CLAUDE_CONFIG_DIR:-~/.claude}:/home/agent/.claude
     healthcheck:
       test:
         [

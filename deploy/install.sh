@@ -18,8 +18,14 @@ node_major="$(node -p 'process.versions.node.split(".")[0]')"
 
 [ -f "$APP_DIR/.env" ] || die "no .env in $APP_DIR — copy .env.example and fill it in first"
 
-command -v claude >/dev/null || grep -qE '^ANTHROPIC_API_KEY=.+' "$APP_DIR/.env" \
-  || die "no Anthropic credential: install the claude CLI and run 'claude setup-token', or set ANTHROPIC_API_KEY in .env"
+if ! grep -qE '^(CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY)=.+' "$APP_DIR/.env"; then
+  # A logged-in CLI on this host is a valid third path, so only warn there.
+  if command -v claude >/dev/null; then
+    echo "note: no credential in .env — relying on the logged-in claude CLI" >&2
+  else
+    die "no Anthropic credential. Run 'claude setup-token' and put the result in CLAUDE_CODE_OAUTH_TOKEN, or set ANTHROPIC_API_KEY in .env"
+  fi
+fi
 
 echo "==> Installing dependencies"
 (cd "$APP_DIR" && npm ci --omit=dev --ignore-scripts=false >/dev/null)

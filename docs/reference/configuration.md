@@ -19,8 +19,8 @@ Each mode then requires its own keys:
 | `password`          | `SESSION_SECRET` (≥32 chars). The password itself is set in `/setup`. |
 | `trusted-network`   | Nothing — but a non-loopback `HOST` also needs `ALLOW_INSECURE=1`.    |
 
-An Anthropic credential is required for anything to run: either `ANTHROPIC_API_KEY`, or `claude setup-token`
-run on the host.
+An Anthropic credential is required for anything to run. Preferred is `CLAUDE_CODE_OAUTH_TOKEN` from
+`claude setup-token`, which uses your Claude subscription rather than per-token API billing.
 
 ## Authentication
 

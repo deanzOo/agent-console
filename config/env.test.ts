@@ -146,6 +146,30 @@ describe("parseEnv", () => {
     });
   });
 
+  describe("anthropic credential", () => {
+    it("reads a subscription oauth token", () => {
+      expect(parse({ CLAUDE_CODE_OAUTH_TOKEN: "oat-token" }).claudeCodeOauthToken).toBe(
+        "oat-token",
+      );
+    });
+
+    it("reports a credential as present when the oauth token is set", () => {
+      expect(parse({ CLAUDE_CODE_OAUTH_TOKEN: "t" }).hasAnthropicCredential).toBe(true);
+    });
+
+    it("reports a credential as present when an api key is set", () => {
+      expect(parse({ ANTHROPIC_API_KEY: "k" }).hasAnthropicCredential).toBe(true);
+    });
+
+    it("reports none when neither is set", () => {
+      expect(parse().hasAnthropicCredential).toBe(false);
+    });
+
+    it("does not fail boot without one, since the CLI's own login may cover it", () => {
+      expect(() => parse()).not.toThrow();
+    });
+  });
+
   describe("optional credentials", () => {
     it("leaves optional integrations unset when absent", () => {
       const config = parse();
