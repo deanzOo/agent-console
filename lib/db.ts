@@ -1,13 +1,14 @@
 import { chmodSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { getConfig } from "@/config/env";
 import * as schema from "./schema";
 
-const MIGRATIONS_FOLDER = fileURLToPath(new URL("../drizzle", import.meta.url));
+// Resolved at runtime: a `new URL(..., import.meta.url)` here is treated as a
+// static import by the bundler and fails the build.
+const MIGRATIONS_FOLDER = path.join(process.cwd(), "drizzle");
 
 export type Db = ReturnType<typeof drizzle<typeof schema>>;
 

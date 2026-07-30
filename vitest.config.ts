@@ -12,8 +12,15 @@ export default defineConfig({
       // Only logic-bearing code is measured. Pages and layouts are markup and
       // are covered by manual/integration checks instead.
       include: ["lib/**/*.ts", "config/**/*.ts"],
-      // middleware.ts is glue over decideAccess, which is tested directly.
-      exclude: ["**/*.test.ts", "**/types.ts"],
+      exclude: [
+        "**/*.test.ts",
+        "**/types.ts",
+        // I/O shells with no branching of their own. Their logic lives in
+        // tested modules: repos.ts for paths, session.ts for the agent loop.
+        "lib/git.ts",
+        "lib/agents/driver.ts",
+        "lib/agents/manager.ts",
+      ],
       // A backstop for the TDD rule, not a substitute for it — see CLAUDE.md.
       thresholds: {
         lines: 90,
