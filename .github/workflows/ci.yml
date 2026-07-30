@@ -20,7 +20,7 @@ jobs:
     outputs:
       checks: ${{ steps.read.outputs.checks }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: read
         run: echo "checks=$(jq -c '[.[] | {id, name, command, requires}]' ci/checks.json)" >> "$GITHUB_OUTPUT"
 
@@ -35,8 +35,8 @@ jobs:
     env:
       HUSKY: 0
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -44,7 +44,7 @@ jobs:
 
       - name: Install trivy
         if: matrix.check.requires == 'trivy'
-        uses: aquasecurity/setup-trivy@v0.2.3
+        uses: aquasecurity/setup-trivy@v0.3.1
 
       - name: ${{ matrix.check.name }}
         run: ${{ matrix.check.command }}
@@ -56,10 +56,10 @@ jobs:
     env:
       HUSKY: 0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
