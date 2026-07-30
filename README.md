@@ -46,7 +46,8 @@ enforces). Security policy: **[SECURITY.md](SECURITY.md)**.
 
 ## Status
 
-Early. The core loop is under construction; see the issue tracker for what works today.
+The core loop works: start a mission, watch it, answer what it asks. GitHub issues, Asana tasks, and
+notifications are wired. It has not yet been run in anger for long — treat it as early software you own.
 
 ## License
 
