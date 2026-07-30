@@ -2,11 +2,14 @@ import type { PermissionResult, SDKMessage } from "@anthropic-ai/claude-agent-sd
 import type { Db } from "../db";
 import {
   appendEvent,
+  getMission,
   recordPrompt,
   setSessionId,
   setStatus,
   type StoredEvent,
 } from "../missions";
+import { buildNotification, deliver, type NotificationKind } from "../notify";
+import { configuredChannels } from "../notify-channels";
 import { PendingPrompts } from "./pending";
 
 export type EventListener = (event: StoredEvent) => void;
@@ -107,6 +110,7 @@ export class MissionSession {
 
     setStatus(this.#db, this.#missionId, "awaiting_input");
     this.#record("mission.prompt", { promptId: prompt.id, toolName, input });
+    this.#notify("awaiting_input", toolName);
 
     return this.#pending.park(prompt.id, signal);
   }
@@ -119,12 +123,14 @@ export class MissionSession {
       }
       setStatus(this.#db, this.#missionId, "done");
       this.#record("mission.status", { status: "done" });
+      this.#notify("done");
     } catch (error) {
       setStatus(this.#db, this.#missionId, "failed");
       this.#record("mission.status", {
         status: "failed",
         error: error instanceof Error ? error.message : String(error),
       });
+      this.#notify("failed");
     } finally {
       this.#pending.cancelAll("Session ended.");
     }
@@ -134,6 +140,21 @@ export class MissionSession {
     if ("session_id" in message && typeof message.session_id === "string") {
       setSessionId(this.#db, this.#missionId, message.session_id);
     }
+  }
+
+  // Fire-and-forget: a failed alert must never stall the agent loop.
+  #notify(kind: NotificationKind, toolName?: string): void {
+    const mission = getMission(this.#db, this.#missionId);
+    if (!mission) return;
+
+    const message = buildNotification({
+      kind,
+      missionId: this.#missionId,
+      title: mission.title,
+      toolName,
+    });
+
+    void deliver(configuredChannels(this.#db), message).catch(() => undefined);
   }
 
   #record(type: string, payload: unknown): void {

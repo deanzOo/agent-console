@@ -20,6 +20,7 @@ export default defineConfig({
         "lib/git.ts",
         "lib/agents/driver.ts",
         "lib/agents/manager.ts",
+        "lib/push.ts",
       ],
       // A backstop for the TDD rule, not a substitute for it — see CLAUDE.md.
       thresholds: {
