@@ -8,7 +8,10 @@ message_file="${1:?usage: check-commit-trailers.sh <commit-msg-file>}"
 # Strip comment lines git adds to the template before matching.
 body="$(grep -v '^#' "$message_file" || true)"
 
-if printf '%s' "$body" | grep -qiE '^[[:space:]]*(co-authored-by|generated[- ]with|signed-off-by)[[:space:]]*:'; then
+# Signed-off-by is deliberately absent: a DCO sign-off asserts the author's own
+# right to submit, crediting nobody else, and dependabot puts one on every
+# update it opens. Rejecting it blocks every dependency bump the repo receives.
+if printf '%s' "$body" | grep -qiE '^[[:space:]]*(co-authored-by|generated[- ]with)[[:space:]]*:'; then
   echo "error: attribution trailers are not used in this repository." >&2
   echo "Remove the Co-Authored-By / Generated-with line from the commit message." >&2
   exit 1
