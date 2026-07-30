@@ -91,6 +91,97 @@ One source of truth per concern, and never a hand-written type that mirrors anot
 - Schema changes go through `npm run db:generate`, and the generated SQL is reviewed and committed. Never
   hand-edit a file under `drizzle/`.
 
+## No magic numbers or strings
+
+Every literal that carries meaning gets a named constant, defined **once**, and imported everywhere it is
+needed. If the same value appears in two files, one of them is wrong — find the source of truth or create it.
+
+```ts
+// no
+if (secret.length < 32) …
+setTimeout(flush, 25_000);
+if (row.status === "awaiting_input") …
+
+// yes
+if (secret.length < MIN_SESSION_SECRET_LENGTH) …
+setTimeout(flush, HEARTBEAT_MS);
+if (row.status === MISSION_STATUS.AWAITING_INPUT) …
+```
+
+Where the constant lives:
+
+- A value the database also constrains → derive it from the schema (`MISSION_STATUSES`), never retype it.
+- A value crossing the client/server boundary (cookie names, event types, header names) → one shared module,
+  imported by both sides. A string typed twice will drift, and the failure is silent.
+- A tuning knob (timeouts, limits, thresholds) → a named constant at the top of the module that owns it, or
+  config if a deployment should be able to change it.
+
+Exempt: `0`, `1`, `-1`, and `""` used as arithmetic or emptiness, and a literal used exactly once inside the
+function that defines its meaning. If you need a comment to explain what a number means, it needed a name.
+
+## Abstract at the seams
+
+**This codebase should read like one person decided how things work here — not like a guided tour of its
+dependencies.** A reader should be able to follow `lib/` without knowing Drizzle's query builder, the Agent
+SDK's message union, or how `web-push` reports a dead subscription. Those are implementation details of
+_their_ authors' opinions about what an API should look like, and every one that leaks into our code is a
+second dialect the next reader has to learn.
+
+So: **wrap third-party surfaces in our own vocabulary at the boundary.** One module owns the dependency and
+speaks its language; everything inside speaks ours.
+
+Already in place, and the pattern to copy:
+
+| Our word                   | Their surface it hides                                                    |
+| -------------------------- | ------------------------------------------------------------------------- |
+| `AgentDriver` / `AgentRun` | the Agent SDK's `query()`, its option bag, its message union              |
+| `AuthAdapter.getUser()`    | JWKS verification, cookie parsing, scrypt, three unrelated auth models    |
+| `Deliverer.send()`         | `web-push`'s VAPID setup and status-code semantics, Telegram's HTTP shape |
+| `Db`                       | Drizzle's generic type, so call sites never spell it                      |
+| `StoredEvent`              | a row with a `payload_json` column                                        |
+
+The test that tells you it is working: **can you change the library without touching anything but the one
+module that owns it?** If swapping the notifier means editing six files, the abstraction is not there yet.
+It is also why the mission loop is testable at all — `AgentDriver` is what lets the whole thing run against
+a fake with no model involved.
+
+### Where not to
+
+This is not a licence to layer. An abstraction earns its place when it marks a **seam** — a boundary to a
+third party, the OS, the network, or the clock. It does not earn its place merely for existing.
+
+- **Don't wrap what is already our vocabulary.** zod _is_ how we describe external data; a `Validator`
+  interface over it buys nothing. Same for React.
+- **Don't add an interface inside the domain because there might be a second implementation one day.** There
+  won't be, and if there is, add it then.
+- **Don't build a generic when you have one case.** Two call sites is a pattern; one is a guess.
+- **Don't rename for the sake of it.** A wrapper that forwards a call unchanged and adds only a new name is
+  cost with no benefit — that is indirection, not abstraction.
+
+The line: an interface with one implementation is _right_ when it hides a third-party surface or makes the
+thing testable, and _wrong_ when it is scaffolding for an imagined future. `AgentDriver` has one real
+implementation and earns it on both counts. A `MissionServiceInterface` would have one implementation and
+earn neither.
+
+## Follow the existing pattern
+
+Before writing something new, look for how this codebase already does it, and do that. Consistency is worth
+more than your improvement, because the next reader — human or agent — learns one pattern instead of five.
+
+Concretely:
+
+- Reading a cookie? `lib/auth/cookies.ts` exists. A new inline parser is a bug waiting to diverge.
+- Adding a table? Follow `lib/schema.ts`: enum plus matching `check()`, types derived, never hand-written.
+- Adding a route? Copy the shape of an existing one — zod at the boundary, thin handler, logic in `lib/`.
+- Adding an integration? Follow the sequence in "Adding an integration" below; do not invent a new gating
+  mechanism alongside `getFeatures()`.
+- Adding an I/O module? Split pure logic from the shell the way `repos.ts` and `git.ts` are split, so the
+  logic stays testable.
+
+If the existing pattern is genuinely wrong for the new case, say so and change it **everywhere** in the same
+pass — one pattern, migrated. What is not acceptable is a second pattern living next to the first, because
+then every future reader has to guess which one is current.
+
 ## Type rigor
 
 - No `any`. No `as` assertions — `@typescript-eslint/consistent-type-assertions` is set to `never` and will
@@ -279,8 +370,8 @@ style guides land; a file past it is doing more than one job, so split it rather
 ### General
 
 - Match the surrounding code: its naming, its idiom, its comment density.
-- Build what the task needs now. No speculative abstraction, no config for a value that never changes, no
-  interface with one implementation.
+- Build what the task needs now. No speculative abstraction, no config for a value that never changes. An
+  interface with one implementation is right at a seam and wrong in the middle — see "Abstract at the seams".
 - Surgical edits. No drive-by refactors or reformatting of untouched code. If broad cleanup looks worthwhile,
   propose it and wait.
 - Spot a bug outside the current task? Don't fix it inline — open a GitHub issue labelled `out-of-scope` with

@@ -10,6 +10,7 @@ import {
 } from "../missions";
 import { buildNotification, deliver, type NotificationKind } from "../notify";
 import { configuredChannels } from "../notify-channels";
+import { MISSION_STATUS, PROMPT_KIND } from "../schema";
 import { PendingPrompts } from "./pending";
 
 export type EventListener = (event: StoredEvent) => void;
@@ -71,16 +72,16 @@ export class MissionSession {
         this.#requestPermission(toolName, input, signal),
     });
 
-    setStatus(this.#db, this.#missionId, "running");
-    this.#record("mission.status", { status: "running" });
+    setStatus(this.#db, this.#missionId, MISSION_STATUS.RUNNING);
+    this.#record("mission.status", { status: MISSION_STATUS.RUNNING });
     this.#finished = this.#consume(this.#run);
   }
 
   answer(promptId: string, result: PermissionResult): boolean {
     const handled = this.#pending.resolve(promptId, result);
     if (handled) {
-      setStatus(this.#db, this.#missionId, "running");
-      this.#record("mission.status", { status: "running" });
+      setStatus(this.#db, this.#missionId, MISSION_STATUS.RUNNING);
+      this.#record("mission.status", { status: MISSION_STATUS.RUNNING });
     }
     return handled;
   }
@@ -103,14 +104,14 @@ export class MissionSession {
   ): Promise<PermissionResult> {
     const prompt = recordPrompt(this.#db, {
       missionId: this.#missionId,
-      kind: "tool_approval",
+      kind: PROMPT_KIND.TOOL_APPROVAL,
       toolName,
       input,
     });
 
-    setStatus(this.#db, this.#missionId, "awaiting_input");
+    setStatus(this.#db, this.#missionId, MISSION_STATUS.AWAITING_INPUT);
     this.#record("mission.prompt", { promptId: prompt.id, toolName, input });
-    this.#notify("awaiting_input", toolName);
+    this.#notify(MISSION_STATUS.AWAITING_INPUT, toolName);
 
     return this.#pending.park(prompt.id, signal);
   }
@@ -121,16 +122,16 @@ export class MissionSession {
         this.#captureSessionId(message);
         this.#record(`agent.${message.type}`, message);
       }
-      setStatus(this.#db, this.#missionId, "done");
-      this.#record("mission.status", { status: "done" });
-      this.#notify("done");
+      setStatus(this.#db, this.#missionId, MISSION_STATUS.DONE);
+      this.#record("mission.status", { status: MISSION_STATUS.DONE });
+      this.#notify(MISSION_STATUS.DONE);
     } catch (error) {
-      setStatus(this.#db, this.#missionId, "failed");
+      setStatus(this.#db, this.#missionId, MISSION_STATUS.FAILED);
       this.#record("mission.status", {
-        status: "failed",
+        status: MISSION_STATUS.FAILED,
         error: error instanceof Error ? error.message : String(error),
       });
-      this.#notify("failed");
+      this.#notify(MISSION_STATUS.FAILED);
     } finally {
       this.#pending.cancelAll("Session ended.");
     }

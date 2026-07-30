@@ -6,12 +6,15 @@ import {
   missions,
   pendingPrompts,
   type Mission,
+  MISSION_STATUS,
   type MISSION_SOURCES,
   type MISSION_STATUSES,
+  type PROMPT_KINDS,
 } from "./schema";
 
 export type MissionStatus = (typeof MISSION_STATUSES)[number];
 export type MissionSource = (typeof MISSION_SOURCES)[number];
+export type PromptKind = (typeof PROMPT_KINDS)[number];
 
 export interface NewMissionInput {
   readonly title: string;
@@ -32,7 +35,7 @@ export interface StoredEvent {
 
 export interface OpenPrompt {
   readonly id: string;
-  readonly kind: "tool_approval" | "question";
+  readonly kind: PromptKind;
   readonly toolName: string | null;
   readonly input: unknown;
   readonly options: unknown;
@@ -45,7 +48,7 @@ export function createMission(db: Db, input: NewMissionInput): Mission {
     .values({
       id: randomUUID(),
       title: input.title,
-      status: "starting",
+      status: MISSION_STATUS.STARTING,
       source: input.source,
       sourceRef: input.sourceRef ?? null,
       repo: input.repo ?? null,
@@ -77,7 +80,7 @@ export function countAwaitingInput(db: Db): number {
   const row = db
     .select({ count: sql<number>`count(*)` })
     .from(missions)
-    .where(eq(missions.status, "awaiting_input"))
+    .where(eq(missions.status, MISSION_STATUS.AWAITING_INPUT))
     .get();
   return row?.count ?? 0;
 }
@@ -141,7 +144,7 @@ export function listEvents(db: Db, missionId: string, since: number): StoredEven
 
 export interface NewPromptInput {
   readonly missionId: string;
-  readonly kind: "tool_approval" | "question";
+  readonly kind: PromptKind;
   readonly toolName?: string | undefined;
   readonly input: unknown;
   readonly options?: unknown;
