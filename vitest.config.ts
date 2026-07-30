@@ -21,6 +21,8 @@ export default defineConfig({
         "lib/agents/driver.ts",
         "lib/agents/manager.ts",
         "lib/push.ts",
+        "lib/sync.ts",
+        "lib/mcp/client.ts",
       ],
       // A backstop for the TDD rule, not a substitute for it — see CLAUDE.md.
       thresholds: {
