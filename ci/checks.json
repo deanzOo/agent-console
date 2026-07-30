@@ -1,0 +1,59 @@
+[
+  {
+    "id": "typecheck",
+    "name": "Typecheck",
+    "command": "npm run typecheck"
+  },
+  {
+    "id": "lint",
+    "name": "Lint",
+    "command": "npm run lint"
+  },
+  {
+    "id": "markdown",
+    "name": "Markdown",
+    "command": "npm run lint:md"
+  },
+  {
+    "id": "links",
+    "name": "Documentation links",
+    "command": "npm run lint:links"
+  },
+  {
+    "id": "format",
+    "name": "Format",
+    "command": "npm run format:check"
+  },
+  {
+    "id": "duplication",
+    "name": "Duplication",
+    "command": "npm run dupes"
+  },
+  {
+    "id": "tests",
+    "name": "Tests + coverage",
+    "command": "npm run test:coverage"
+  },
+  {
+    "id": "build",
+    "name": "Build",
+    "command": "npm run build"
+  },
+  {
+    "id": "audit",
+    "name": "Dependency audit",
+    "command": "npm audit --audit-level=high"
+  },
+  {
+    "id": "hardcoded-config",
+    "name": "No hardcoded config",
+    "command": "bash scripts/check-no-hardcoded-config.sh"
+  },
+  {
+    "id": "vulnerabilities",
+    "name": "Deep scan (secrets, IaC)",
+    "command": "trivy fs --scanners secret,misconfig --severity HIGH,CRITICAL --exit-code 1 --quiet .",
+    "requires": "trivy",
+    "installHint": "brew install trivy — or skip it locally; CI runs it on every push"
+  }
+]

@@ -73,6 +73,24 @@ don't rely on it to catch what review should.
 
 ---
 
+## Schemas: Drizzle owns tables, zod owns boundaries
+
+One source of truth per concern, and never a hand-written type that mirrors another.
+
+| Concern                                                          | Owner                                                         |
+| ---------------------------------------------------------------- | ------------------------------------------------------------- |
+| Table shape, migrations, row types                               | Drizzle (`lib/schema.ts`) — `$inferSelect` / `$inferInsert`   |
+| Insert/update validation                                         | `drizzle-zod` (`lib/validation.ts`) — derived from the tables |
+| Request bodies, external API responses, JSON inside TEXT columns | Hand-written zod                                              |
+| Environment variables                                            | zod (`config/env.ts`)                                         |
+
+- **Never hand-write a zod schema that mirrors a table.** Use `createInsertSchema` / `createSelectSchema`.
+- **Drizzle's `enum` option is TypeScript-only** and emits no DDL. Every one needs a matching `check()`
+  constraint, or the database will accept values the types forbid. Use `sql.raw` for the literals —
+  bound parameters do not survive into DDL.
+- Schema changes go through `npm run db:generate`, and the generated SQL is reviewed and committed. Never
+  hand-edit a file under `drizzle/`.
+
 ## Type rigor
 
 - No `any`. No `as` assertions — `@typescript-eslint/consistent-type-assertions` is set to `never` and will
@@ -98,28 +116,84 @@ don't rely on it to catch what review should.
 
 ## The gate
 
-`npm run verify` runs typecheck, lint, format check, duplication check, and tests with coverage. It must be
-green before you push. CI runs the same set plus `build` and the hardcoded-config scan.
+**`npm run ci` runs everything CI runs, locally.** It must be green before you push — the `pre-push` hook
+runs it for you.
 
-| Command                 | What it gates                                                              |
-| ----------------------- | -------------------------------------------------------------------------- |
-| `npm run typecheck`     | `tsc --noEmit`, strict, `noUncheckedIndexedAccess`                         |
-| `npm run lint`          | ESLint — no `any`, no assertions, no unused                                |
-| `npm run format:check`  | Prettier. Formatting is not a review topic                                 |
-| `npm run dupes`         | jscpd, 2% threshold. Tests excluded — duplication there is usually clarity |
-| `npm run test:coverage` | vitest + thresholds                                                        |
-| `npm run verify`        | all of the above, one command                                              |
+The check list lives in **[`ci/checks.json`](ci/checks.json)**, and both sides read it: the local script
+iterates it, and the GitHub matrix is built from it with `fromJSON`. A check therefore cannot exist in one
+place and not the other. **Add a check there and nowhere else.**
 
-Pre-commit runs prettier + eslint on staged files. Commit-msg runs commitlint.
+| Check               | What it gates                                                              |
+| ------------------- | -------------------------------------------------------------------------- |
+| Typecheck           | `tsc --noEmit`, strict, `noUncheckedIndexedAccess`                         |
+| Lint                | ESLint — no `any`, no assertions, no unused, 300-line cap                  |
+| Markdown            | markdownlint                                                               |
+| Documentation links | Every relative link in a `.md` resolves                                    |
+| Format              | Prettier. Formatting is not a review topic                                 |
+| Duplication         | jscpd, 2% threshold. Tests excluded — duplication there is usually clarity |
+| Tests + coverage    | vitest + thresholds                                                        |
+| Build               | `next build`                                                               |
+| Dependency audit    | `npm audit --audit-level=high`                                             |
+| No hardcoded config | Rejects credential shapes and deployment-specific literals                 |
+| Deep scan           | Trivy: secrets and IaC misconfiguration                                    |
+
+Hooks are convenience, not the boundary — `--no-verify` skips them, so everything runs again in CI.
+
+### Tooling must come from `node_modules`
+
+Anything a contributor needs should arrive with `npm ci`. If you reach for a tool, check for an npm-installable
+equivalent first and prefer it, even if it is slightly less capable — a check nobody can run locally is a
+check that only fails after a push.
+
+**Host-installed tooling, complete list:**
+
+| Tool                       | Needed for                                | Without it                                                                          |
+| -------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------- |
+| Node 22+, npm              | Everything                                | Nothing works                                                                       |
+| git                        | The product itself — clones and worktrees | Nothing works                                                                       |
+| [trivy](https://trivy.dev) | The secret and IaC deep scan              | That one check is **skipped locally with a notice**; CI still runs it on every push |
+
+That is the whole list, and it should stay that way. Everything else — ESLint, Prettier, vitest, jscpd,
+markdownlint, the link checker, commitlint, drizzle-kit — is a dev dependency.
+
+If you add a check needing a host binary, give its manifest entry a `requires` and an `installHint`, so a
+contributor without it sees what to install rather than a confusing failure. Never let a missing tool
+silently pass.
 
 ## Commits, branches, releases
 
-- **Conventional Commits, enforced by commitlint.** This is load-bearing: release-please derives the version
-  bump and CHANGELOG from commit types. A malformed subject silently drops a change out of the release notes.
-- Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`, `style`, `revert`, `deps`.
-  Subject ≤72 chars, imperative, no trailing period.
-- No co-author trailer.
-- Small, frequent commits — one logical unit each.
+Full convention with examples: **[docs/reference/commit-conventions.md](docs/reference/commit-conventions.md)**.
+The short version:
+
+- **Conventional Commits, enforced by commitlint.** Load-bearing: release-please derives the version bump and
+  CHANGELOG from commit types. A vague subject becomes a vague release note.
+- Subject ≤72 chars, imperative, lower case, no trailing period. Say what changes for a _user_, not which
+  files you touched.
+- Body is for **why** — the constraint, the rejected alternative, the trap. Skip it when the subject is the
+  whole story.
+- **No attribution trailers of any kind.** No `Co-Authored-By`, no tool credit. Enforced by a commit-msg hook.
+- Small, frequent commits — one logical unit each. If the subject needs an "and", split it.
+- Never amend or force-push a commit already on `main`; release-please has read it.
+
+### `main` is protected — everything lands via PR
+
+Never push directly to `main` (or `master`, `dev`, `staging`, `prod`). A `pre-push` hook refuses it locally,
+and GitHub branch protection is the real enforcement — see
+[docs/how-to/repository-setup.md](docs/how-to/repository-setup.md).
+
+```bash
+git switch -c feat/mission-transcript
+# work, commit
+npm run verify
+git push -u origin HEAD && gh pr create
+```
+
+Merge only when CI is fully green. Never on red, skipped, or unrun tests. Rebase onto the latest `main` and
+let CI pass again before merging, so nothing merges on a stale base.
+
+Hooks are a convenience, not the boundary: `--no-verify` skips them, which is why commit linting, trailer
+checks, and the full gate all run again in CI.
+
 - Work happens on a branch in a git worktree, never directly on `main`. Baseline the green gate on the
   untouched base branch _before_ writing code, so you know which failures you introduced.
 - Push to `main` requires explicit approval. Everything else is fine to push.
@@ -137,7 +211,7 @@ Pre-commit runs prettier + eslint on staged files. Commit-msg runs commitlint.
 
 ## Codebase map
 
-```
+```text
 app/            routes — pages and route handlers (thin; logic lives in lib/)
 config/         env.ts (zod-validated env), features.ts (getFeatures)
 lib/agents/     session manager — the core. query(), canUseTool parking, SSE fan-out

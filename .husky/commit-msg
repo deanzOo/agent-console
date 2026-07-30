@@ -1,1 +1,2 @@
 npx --no -- commitlint --edit "$1"
+bash scripts/check-commit-trailers.sh "$1"

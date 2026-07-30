@@ -21,10 +21,12 @@
     "test:coverage": "vitest run --coverage",
     "graph": "graphify .",
     "graph:update": "graphify . --update",
-    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run dupes && npm run test:coverage",
     "prepare": "husky",
     "db:generate": "drizzle-kit generate",
-    "db:check": "drizzle-kit check"
+    "db:check": "drizzle-kit check",
+    "lint:md": "markdownlint-cli2",
+    "lint:links": "git ls-files '*.md' | xargs -n1 markdown-link-check --quiet --config .markdown-link-check.json",
+    "ci": "bash scripts/ci-local.sh"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
@@ -65,6 +67,8 @@
     "husky": "^9.1.7",
     "jscpd": "^5.0.14",
     "lint-staged": "^17.2.0",
+    "markdown-link-check": "^3.15.0",
+    "markdownlint-cli2": "^0.23.2",
     "prettier": "^3.9.6",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4.3.3",

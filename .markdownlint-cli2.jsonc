@@ -1,0 +1,12 @@
+{
+  "config": {
+    "default": true,
+    // Prettier owns wrapping; two tools fighting over it helps nobody.
+    "MD013": false,
+    // Repeated headings are correct in ADRs, where every record has the same shape.
+    "MD024": { "siblings_only": true },
+    "MD033": { "allowed_elements": ["br"] },
+  },
+  "globs": ["**/*.md"],
+  "ignores": ["node_modules", ".next", "coverage", "CHANGELOG.md", "drizzle"],
+}
