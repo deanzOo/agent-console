@@ -2,6 +2,7 @@ node_modules/
 .next/
 out/
 .jscpd/
+coverage/
 trivy-results.sarif
 *.tsbuildinfo
 next-env.d.ts

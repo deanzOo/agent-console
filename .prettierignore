@@ -1,6 +1,7 @@
 node_modules/
 .next/
 .jscpd/
+coverage/
 CHANGELOG.md
 package-lock.json
 trivy-results.sarif
