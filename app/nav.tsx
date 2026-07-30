@@ -24,6 +24,9 @@ export function Nav() {
       </Link>
       {features.github && <Link href="/issues">Issues</Link>}
       {features.asana && <Link href="/tasks">Tasks</Link>}
+      <Link href="/setup" className={showSync ? "" : "ml-auto"}>
+        Setup
+      </Link>
       {showSync && (
         <span className="ml-auto">
           <SyncButton />

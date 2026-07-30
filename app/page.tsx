@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getDatabase } from "@/lib/db";
 import { countAwaitingInput, listMissions } from "@/lib/missions";
+import { isSetupComplete } from "@/lib/settings";
 import { NewMissionForm } from "./new-mission-form";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +18,10 @@ const STATUS_STYLES: Record<string, string> = {
 
 export default function Dashboard() {
   const db = getDatabase();
+  // First run lands on the wizard. Every other page is reached from here, so
+  // one check covers the app without risking a redirect loop on /setup itself.
+  if (!isSetupComplete(db)) redirect("/setup");
+
   const missions = listMissions(db);
   const waiting = countAwaitingInput(db);
 
