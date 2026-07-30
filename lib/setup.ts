@@ -38,6 +38,19 @@ export function setupState(db: Db, context: SetupContext): SetupState {
   };
 }
 
+export interface SetupAccess {
+  readonly authenticated: boolean;
+  readonly authMode: AuthMode;
+  readonly passwordSet: boolean;
+}
+
+// The wizard is reachable without a session only while there is no way to get
+// one. Under the other modes a caller with no session got past no gate at all.
+export function canAccessSetup(access: SetupAccess): boolean {
+  if (access.authenticated) return true;
+  return access.authMode === "password" && !access.passwordSet;
+}
+
 export type SetupStep =
   | { step: "password"; password: string }
   | { step: "github"; token: string }
