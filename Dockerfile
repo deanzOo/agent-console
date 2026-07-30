@@ -2,8 +2,14 @@
 # Everything the agent needs — git, the Claude CLI — lives inside the image.
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
+# better-sqlite3 has no prebuilt binary for this image and compiles from source,
+# so the toolchain is needed here. It stays in this stage — the runtime image
+# copies only node_modules and never sees a compiler.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 make g++ \
+ && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts=false
+RUN npm ci
 
 FROM node:22-bookworm-slim AS build
 WORKDIR /app

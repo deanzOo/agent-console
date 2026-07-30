@@ -72,5 +72,7 @@ The container needs its own credentials to push:
 
 - **One container.** Agent sessions live in process memory; a second replica would not see them. Do not scale
   this service.
-- `better-sqlite3` resolves a prebuilt binary for `node:22-bookworm-slim`, so the image needs no compiler.
+- `better-sqlite3` compiles from source on this base image, so the build stage installs python3/make/g++.
+  They are discarded with that stage — the runtime image has no compiler. Expect the first build to take a
+  few minutes; later ones hit the layer cache.
 - The container runs as uid 10001, never root.
