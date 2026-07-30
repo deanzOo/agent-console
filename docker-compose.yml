@@ -1,0 +1,36 @@
+services:
+  agent-console:
+    build: .
+    image: agent-console:local
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Inside the container these are fixed; the volumes below back them.
+      DATA_DIR: /data
+      WORKSPACE_ROOT: /workspace
+      HOST: 0.0.0.0
+    # Loopback only — put cloudflared or a reverse proxy in front.
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - data:/data
+      - workspace:/workspace
+      # Authenticate on the host with `claude setup-token`, or drop this and
+      # set ANTHROPIC_API_KEY in .env instead.
+      - ${CLAUDE_CONFIG_DIR:-~/.claude}:/home/agent/.claude
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  data:
+  workspace:

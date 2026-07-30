@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+.jscpd
+coverage
+data.db*
+.env
+.env.local
+*.md
+!README.md
