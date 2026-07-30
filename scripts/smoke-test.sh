@@ -5,16 +5,20 @@
 # typecheck, lint, the full test suite and `next build` all passed. Nothing
 # short of starting the server catches that class of failure.
 set -uo pipefail
+# Job control, so the server gets its own process group and cleanup can signal
+# the whole tree rather than only the process bash happens to know the pid of.
+set -m
 
 cd "$(dirname "$0")/.."
 
 PORT="${SMOKE_PORT:-3999}"
+STARTUP_TIMEOUT_SECONDS=45
 DATA="$(mktemp -d)"
 LOG="$DATA/app.log"
 APP=""
 
 cleanup() {
-  [ -n "$APP" ] && kill "$APP" 2>/dev/null
+  [ -n "$APP" ] && kill -- "-$APP" 2>/dev/null
   rm -rf "$DATA"
 }
 trap cleanup EXIT
@@ -29,11 +33,15 @@ DATA_DIR="$DATA" \
 WORKSPACE_ROOT="$DATA/work" \
 HOST=127.0.0.1 \
 PORT="$PORT" \
-  npx next start -p "$PORT" > "$LOG" 2>&1 &
+  ./node_modules/.bin/next start -p "$PORT" > "$LOG" 2>&1 &
 APP=$!
 
-for _ in $(seq 1 45); do
-  curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$PORT/setup" 2>/dev/null && break
+ready=0
+for _ in $(seq 1 "$STARTUP_TIMEOUT_SECONDS"); do
+  if curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$PORT/setup" 2>/dev/null; then
+    ready=1
+    break
+  fi
   if ! kill -0 "$APP" 2>/dev/null; then
     echo "smoke: server exited during startup" >&2
     cat "$LOG" >&2
@@ -41,6 +49,12 @@ for _ in $(seq 1 45); do
   fi
   sleep 1
 done
+
+if [ "$ready" -ne 1 ]; then
+  echo "smoke: server did not answer within ${STARTUP_TIMEOUT_SECONDS}s" >&2
+  cat "$LOG" >&2
+  exit 1
+fi
 
 failed=0
 check() {
