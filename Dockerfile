@@ -64,5 +64,12 @@ COPY --chown=agent:agent public ./public
 USER agent
 
 EXPOSE 3000
+
+# On the image rather than in compose, so a plain `docker run` or a systemd unit
+# gets the same health signal. Anything below 500 means the process is serving:
+# /login answers without a session, so this stays honest under every AUTH_MODE.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD ["node", "-e", "fetch(`http://127.0.0.1:${process.env.PORT||3000}/login`).then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["npm", "start"]
