@@ -25,7 +25,7 @@ jobs:
       # Gate: fails the build on anything HIGH or worse. Human-readable output
       # so a failed run is actionable without opening the Security tab.
       - name: Trivy (gate)
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -39,7 +39,7 @@ jobs:
       # build, and tolerates repos without code scanning enabled.
       - name: Trivy (SARIF)
         if: always()
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
