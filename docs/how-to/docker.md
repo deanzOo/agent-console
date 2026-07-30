@@ -48,6 +48,9 @@ docker compose logs -f
 The port binds to `127.0.0.1:3000`, so nothing is exposed until you put cloudflared or a reverse proxy in
 front — see [deploy.md](deploy.md), which applies unchanged from step 4 onward.
 
+If something already holds 3000 on the host, set `HOST_PORT` in `.env` and point your proxy at that
+instead. The container always listens on 3000 internally.
+
 ## What the volumes hold
 
 | Volume      | Contents                                    | Losing it means                         |

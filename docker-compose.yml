@@ -9,9 +9,11 @@ services:
       DATA_DIR: /data
       WORKSPACE_ROOT: /workspace
       HOST: 0.0.0.0
+      PORT: 3000
     # Loopback only — put cloudflared or a reverse proxy in front.
+    # HOST_PORT lets a deployment move off 3000 when something already holds it.
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${HOST_PORT:-3000}:3000"
     volumes:
       - data:/data
       - workspace:/workspace
