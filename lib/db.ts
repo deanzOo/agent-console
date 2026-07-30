@@ -1,41 +1,37 @@
-import { chmodSync, mkdirSync, readFileSync } from "node:fs";
+import { chmodSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { getConfig } from "@/config/env";
+import * as schema from "./schema";
 
-const SCHEMA_PATH = fileURLToPath(new URL("./schema.sql", import.meta.url));
+const MIGRATIONS_FOLDER = fileURLToPath(new URL("../drizzle", import.meta.url));
 
-/**
- * Opens (creating if needed) the SQLite database and applies the schema.
- *
- * Safe to call on an existing database: every statement in schema.sql is
- * `IF NOT EXISTS`, so this doubles as the boot-time migration step.
- */
-export function openDatabase(file: string): Database.Database {
+export type Db = ReturnType<typeof drizzle<typeof schema>>;
+
+export function openDatabase(file: string): Db {
   mkdirSync(path.dirname(file), { recursive: true });
 
-  const db = new Database(file);
+  const connection = new Database(file);
+  // WAL so SSE readers never block the agent loop's writes.
+  connection.pragma("journal_mode = WAL");
+  // SQLite defaults these off.
+  connection.pragma("foreign_keys = ON");
 
-  // WAL lets the SSE readers and the settings UI read while the agent loop is
-  // appending events, instead of serialising behind a write lock.
-  db.pragma("journal_mode = WAL");
-  // Off by default in SQLite, so an orphaned event would otherwise be accepted.
-  db.pragma("foreign_keys = ON");
+  const db = drizzle(connection, { schema });
+  migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
 
-  db.exec(readFileSync(SCHEMA_PATH, "utf8"));
-
-  // The file holds tokens and push keys. Applied after creation because the
-  // umask decides the initial mode.
+  // Holds tokens and push keys; the umask decides the mode at creation.
   chmodSync(file, 0o600);
 
   return db;
 }
 
-let cached: Database.Database | undefined;
+let cached: Db | undefined;
 
-/** Process-wide handle. The app is deliberately single-process — see CLAUDE.md. */
-export function getDatabase(): Database.Database {
+export function getDatabase(): Db {
   cached ??= openDatabase(path.join(getConfig().dataDir, "data.db"));
   return cached;
 }

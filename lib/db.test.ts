@@ -2,14 +2,37 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { Database } from "better-sqlite3";
-import { openDatabase } from "./db";
+import { sql } from "drizzle-orm";
+import { openDatabase, type Db } from "./db";
+import { events, missions, settings } from "./schema";
 
 let dir: string;
-let db: Database;
+let db: Db;
 
 function dbPath() {
   return path.join(dir, "nested", "data.db");
+}
+
+function causeChain(run: () => unknown): string {
+  try {
+    run();
+  } catch (error) {
+    const messages: string[] = [];
+    let current: unknown = error;
+    while (current instanceof Error) {
+      messages.push(current.message);
+      current = current.cause;
+    }
+    return messages.join(" | ");
+  }
+  return "";
+}
+
+function tableNames(database: Db): string[] {
+  const rows = database.all<{ name: string }>(
+    sql`SELECT name FROM sqlite_master WHERE type = 'table'`,
+  );
+  return rows.map((row) => row.name);
 }
 
 beforeEach(() => {
@@ -17,7 +40,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  db?.close();
+  db?.$client.close();
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -34,12 +57,7 @@ describe("openDatabase", () => {
 
   it("creates every table the app depends on", () => {
     db = openDatabase(dbPath());
-    const tables = db
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
-      .all()
-      .map((row) => Object(row).name);
-
-    expect(tables).toEqual(
+    expect(tableNames(db)).toEqual(
       expect.arrayContaining([
         "missions",
         "events",
@@ -57,49 +75,91 @@ describe("openDatabase", () => {
     db = openDatabase(dbPath());
     expect(() =>
       db
-        .prepare(
-          "INSERT INTO events (mission_id, seq, ts, type, payload_json) VALUES (?, ?, ?, ?, ?)",
-        )
-        .run("missing-mission", 1, "2026-01-01T00:00:00Z", "text", "{}"),
+        .insert(events)
+        .values({
+          missionId: "missing-mission",
+          seq: 1,
+          ts: "2026-01-01T00:00:00Z",
+          type: "text",
+          payloadJson: "{}",
+        })
+        .run(),
     ).toThrowError(/FOREIGN KEY/i);
   });
 
   it("runs in WAL mode so a reader never blocks the agent loop", () => {
     db = openDatabase(dbPath());
-    const row = db.pragma("journal_mode", { simple: true });
-    expect(row).toBe("wal");
+    expect(db.$client.pragma("journal_mode", { simple: true })).toBe("wal");
   });
 
   it("is idempotent — reopening an existing database preserves rows", () => {
     const first = openDatabase(dbPath());
-    first.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run("k", "v");
-    first.close();
+    first.insert(settings).values({ key: "k", value: "v" }).run();
+    first.$client.close();
 
     db = openDatabase(dbPath());
-    const row = db.prepare("SELECT value FROM settings WHERE key = ?").get("k");
-    expect(Object(row).value).toBe("v");
+    const row = db.select().from(settings).get();
+    expect(row?.value).toBe("v");
   });
 
   it("rejects a duplicate event sequence within one mission", () => {
     db = openDatabase(dbPath());
-    db.prepare(
-      "INSERT INTO missions (id, title, status, source) VALUES (?, ?, ?, ?)",
-    ).run("m1", "t", "running", "free");
-    const insert = db.prepare(
-      "INSERT INTO events (mission_id, seq, ts, type, payload_json) VALUES (?, ?, ?, ?, ?)",
-    );
-    insert.run("m1", 1, "2026-01-01T00:00:00Z", "text", "{}");
+    db.insert(missions)
+      .values({ id: "m1", title: "t", status: "running", source: "free" })
+      .run();
+
+    const event = {
+      missionId: "m1",
+      seq: 1,
+      ts: "2026-01-01T00:00:00Z",
+      type: "text",
+      payloadJson: "{}",
+    };
+    db.insert(events).values(event).run();
+
     expect(() =>
-      insert.run("m1", 1, "2026-01-01T00:00:01Z", "text", "{}"),
+      db
+        .insert(events)
+        .values({ ...event, ts: "2026-01-01T00:00:01Z" })
+        .run(),
     ).toThrowError(/UNIQUE|PRIMARY KEY/i);
   });
 
   it("rejects a mission status outside the known lifecycle", () => {
     db = openDatabase(dbPath());
+    // Drizzle wraps driver errors, so the constraint name is on the cause.
     expect(() =>
-      db
-        .prepare("INSERT INTO missions (id, title, status, source) VALUES (?, ?, ?, ?)")
-        .run("m2", "t", "exploded", "free"),
-    ).toThrowError(/CHECK/i);
+      db.run(
+        sql`INSERT INTO missions (id, title, status, source) VALUES ('m2', 't', 'exploded', 'free')`,
+      ),
+    ).toThrowError(expect.objectContaining({ cause: expect.any(Error) }));
+
+    expect(
+      causeChain(() =>
+        db.run(
+          sql`INSERT INTO missions (id, title, status, source) VALUES ('m3', 't', 'exploded', 'free')`,
+        ),
+      ),
+    ).toMatch(/CHECK constraint failed: missions_status_valid/i);
+  });
+
+  it("rejects a mission source outside the known set", () => {
+    db = openDatabase(dbPath());
+    expect(
+      causeChain(() =>
+        db.run(
+          sql`INSERT INTO missions (id, title, status, source) VALUES ('m4', 't', 'running', 'jira')`,
+        ),
+      ),
+    ).toMatch(/CHECK constraint failed: missions_source_valid/i);
+  });
+
+  it("rejects a blank settings value at the database level", () => {
+    db = openDatabase(dbPath());
+    expect(
+      causeChain(() =>
+        db.run(sql`INSERT INTO settings (key, value) VALUES ('k', '  ')`),
+      ),
+    ).toMatch(/CHECK constraint failed: settings_value_not_blank/i);
   });
 });

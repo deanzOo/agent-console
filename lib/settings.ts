@@ -1,13 +1,8 @@
-import type { Database } from "better-sqlite3";
+import { eq } from "drizzle-orm";
 import type { FeatureCredentials } from "@/config/features";
+import type { Db } from "./db";
+import { settings } from "./schema";
 
-/**
- * Operator-editable configuration.
- *
- * Precedence is env var → settings row → unset. Env wins so a deployment can
- * pin a value the UI cannot silently change; the settings table exists so an
- * operator can finish configuring from /setup without editing files on the box.
- */
 export type SettingKey =
   | "setup_complete"
   | "github_token"
@@ -18,7 +13,6 @@ export type SettingKey =
   | "telegram_bot_token"
   | "telegram_chat_id"
   | "password_hash"
-  | "session_secret"
   | "default_base_branch"
   | "max_concurrent_missions"
   | "sync_interval_seconds"
@@ -30,31 +24,34 @@ function blankAsUndefined(value: string | undefined | null): string | undefined 
   return trimmed ? trimmed : undefined;
 }
 
-export function getSetting(db: Database, key: SettingKey): string | undefined {
-  const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key);
-  if (row === undefined) return undefined;
-  const { value } = Object(row);
-  return typeof value === "string" ? blankAsUndefined(value) : undefined;
+export function getSetting(db: Db, key: SettingKey): string | undefined {
+  const row = db
+    .select({ value: settings.value })
+    .from(settings)
+    .where(eq(settings.key, key))
+    .get();
+  return blankAsUndefined(row?.value);
 }
 
-/** Storing a blank value clears the key — "" and absent mean the same thing. */
-export function setSetting(db: Database, key: SettingKey, value: string): void {
+export function setSetting(db: Db, key: SettingKey, value: string): void {
   const normalized = blankAsUndefined(value);
   if (normalized === undefined) {
     deleteSetting(db, key);
     return;
   }
-  db.prepare(
-    "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
-  ).run(key, normalized);
+  db.insert(settings)
+    .values({ key, value: normalized })
+    .onConflictDoUpdate({ target: settings.key, set: { value: normalized } })
+    .run();
 }
 
-export function deleteSetting(db: Database, key: SettingKey): void {
-  db.prepare("DELETE FROM settings WHERE key = ?").run(key);
+export function deleteSetting(db: Db, key: SettingKey): void {
+  db.delete(settings).where(eq(settings.key, key)).run();
 }
 
+// Env wins so a deployment can pin a value the UI cannot silently change.
 export function resolveSetting(
-  db: Database,
+  db: Db,
   key: SettingKey,
   envValue: string | undefined,
 ): string | undefined {
@@ -66,9 +63,8 @@ export interface EnvCredentials {
   readonly asanaToken?: string | undefined;
 }
 
-/** The merged credential view every feature check reads from. */
 export function resolveCredentials(
-  db: Database,
+  db: Db,
   env: EnvCredentials,
 ): Required<FeatureCredentials> {
   return {
@@ -81,10 +77,10 @@ export function resolveCredentials(
   };
 }
 
-export function isSetupComplete(db: Database): boolean {
+export function isSetupComplete(db: Db): boolean {
   return getSetting(db, "setup_complete") === "1";
 }
 
-export function markSetupComplete(db: Database): void {
+export function markSetupComplete(db: Db): void {
   setSetting(db, "setup_complete", "1");
 }

@@ -22,7 +22,9 @@
     "graph": "graphify .",
     "graph:update": "graphify . --update",
     "verify": "npm run typecheck && npm run lint && npm run format:check && npm run dupes && npm run test:coverage",
-    "prepare": "husky"
+    "prepare": "husky",
+    "db:generate": "drizzle-kit generate",
+    "db:check": "drizzle-kit check"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
@@ -37,6 +39,8 @@
     "@anthropic-ai/claude-agent-sdk": "^0.3.220",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "better-sqlite3": "^13.0.2",
+    "drizzle-orm": "^0.45.2",
+    "drizzle-zod": "^0.8.3",
     "jose": "^6.2.5",
     "next": "^16.2.12",
     "react": "^19.2.8",
@@ -55,6 +59,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/web-push": "^3.6.4",
     "@vitest/coverage-v8": "^4.1.10",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.2.12",
     "husky": "^9.1.7",
@@ -71,6 +76,7 @@
     "brace-expansion": "^5.0.8",
     "minimatch": "^10.2.6",
     "postcss": "^8.5.25",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.3",
+    "esbuild": "^0.25.0"
   }
 }

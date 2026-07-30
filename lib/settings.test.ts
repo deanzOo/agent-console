@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { Database } from "better-sqlite3";
+import type { Db } from "./db";
 import { openDatabase } from "./db";
 import {
   deleteSetting,
@@ -15,7 +15,7 @@ import {
 } from "./settings";
 
 let dir: string;
-let db: Database;
+let db: Db;
 
 beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), "claudevps-settings-"));
@@ -23,7 +23,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  db.close();
+  db.$client.close();
   rmSync(dir, { recursive: true, force: true });
 });
 

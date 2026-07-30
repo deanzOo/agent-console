@@ -5,3 +5,4 @@ coverage/
 CHANGELOG.md
 package-lock.json
 trivy-results.sarif
+drizzle/meta/
