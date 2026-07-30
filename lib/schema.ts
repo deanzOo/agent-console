@@ -18,16 +18,35 @@ function oneOf(column: SQLWrapper, values: readonly string[]) {
   return sql`${column} IN (${sql.raw(literals)})`;
 }
 
+export const MISSION_STATUS = {
+  STARTING: "starting",
+  RUNNING: "running",
+  AWAITING_INPUT: "awaiting_input",
+  DONE: "done",
+  FAILED: "failed",
+  STOPPED: "stopped",
+} as const;
+
 export const MISSION_STATUSES = [
-  "starting",
-  "running",
-  "awaiting_input",
-  "done",
-  "failed",
-  "stopped",
+  MISSION_STATUS.STARTING,
+  MISSION_STATUS.RUNNING,
+  MISSION_STATUS.AWAITING_INPUT,
+  MISSION_STATUS.DONE,
+  MISSION_STATUS.FAILED,
+  MISSION_STATUS.STOPPED,
 ] as const;
 
-export const MISSION_SOURCES = ["free", "github", "asana"] as const;
+export const MISSION_SOURCE = {
+  FREE: "free",
+  GITHUB: "github",
+  ASANA: "asana",
+} as const;
+
+export const MISSION_SOURCES = [
+  MISSION_SOURCE.FREE,
+  MISSION_SOURCE.GITHUB,
+  MISSION_SOURCE.ASANA,
+] as const;
 
 export const missions = sqliteTable(
   "missions",
@@ -68,7 +87,12 @@ export const events = sqliteTable(
   (table) => [primaryKey({ columns: [table.missionId, table.seq] })],
 );
 
-export const PROMPT_KINDS = ["tool_approval", "question"] as const;
+export const PROMPT_KIND = {
+  TOOL_APPROVAL: "tool_approval",
+  QUESTION: "question",
+} as const;
+
+export const PROMPT_KINDS = [PROMPT_KIND.TOOL_APPROVAL, PROMPT_KIND.QUESTION] as const;
 
 export const pendingPrompts = sqliteTable(
   "pending_prompts",

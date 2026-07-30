@@ -28,22 +28,39 @@ ENV NODE_ENV=production \
     DATA_DIR=/data \
     WORKSPACE_ROOT=/workspace
 
-# git is the product; ca-certificates and openssh for cloning and pushing.
+ARG GH_VERSION=2.96.0
+ARG TARGETARCH
+
+# git is the product; gh opens the pull requests; openssh for key-based pushes.
+# The user is created here, before any COPY, so ownership is set at copy time.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git ca-certificates openssh-client tini \
+ && apt-get install -y --no-install-recommends \
+      git ca-certificates openssh-client tini curl \
+ && curl -fsSL -o /tmp/gh.deb \
+      "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${TARGETARCH:-amd64}.deb" \
+ && dpkg -i /tmp/gh.deb \
+ && rm -f /tmp/gh.deb \
+ && apt-get purge -y curl && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/* \
  && npm install -g @anthropic-ai/claude-code \
- && npm cache clean --force
+ && npm cache clean --force \
+ && useradd --system --create-home --uid 10001 agent \
+ && mkdir -p /data /workspace \
+ && chown agent:agent /app /data /workspace
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=build /app/.next ./.next
-COPY package.json next.config.ts drizzle ./
-COPY public ./public
+# --chown sets ownership as files are written. A `chown -R` afterwards would
+# copy every file up into a new overlay layer — on node_modules that is tens of
+# thousands of files, which doubles the image and stalls the build on I/O.
+COPY --from=deps --chown=agent:agent /app/node_modules ./node_modules
+COPY --from=build --chown=agent:agent /app/.next ./.next
+# Each directory needs its own COPY: with several sources, COPY flattens
+# directory *contents* into the destination, so `drizzle` would land as loose
+# files in /app and the migrations would not be found.
+COPY --chown=agent:agent package.json next.config.ts ./
+COPY --chown=agent:agent drizzle ./drizzle
+COPY --chown=agent:agent public ./public
 
 # Never root: the agent can do anything this user can.
-RUN useradd --system --create-home --uid 10001 agent \
- && mkdir -p /data /workspace \
- && chown -R agent:agent /app /data /workspace
 USER agent
 
 EXPOSE 3000

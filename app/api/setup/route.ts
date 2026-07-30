@@ -2,9 +2,15 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getConfig } from "@/config/env";
 import { getDatabase } from "@/lib/db";
+import { setupAccessAllowed } from "@/lib/setup-access";
 import { applySetupStep, setupState } from "@/lib/setup";
 
 export const dynamic = "force-dynamic";
+
+// A fresh NextResponse per call: a shared one has a body that only streams once.
+function unauthorized() {
+  return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+}
 
 const stepSchema = z.discriminatedUnion("step", [
   z.object({ step: z.literal("password"), password: z.string().min(1) }),
@@ -19,7 +25,9 @@ const stepSchema = z.discriminatedUnion("step", [
   z.object({ step: z.literal("finish") }),
 ]);
 
-export function GET() {
+export async function GET(request: Request) {
+  if (!(await setupAccessAllowed(request))) return unauthorized();
+
   const config = getConfig();
   return NextResponse.json(
     setupState(getDatabase(), {
@@ -31,6 +39,8 @@ export function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!(await setupAccessAllowed(request))) return unauthorized();
+
   const parsed = stepSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });

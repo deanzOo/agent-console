@@ -54,6 +54,36 @@ describe("decideAccess", () => {
       ).toEqual({ type: "allow" });
     });
 
+    it("allows the login endpoint, which is itself the gate", () => {
+      expect(
+        decideAccess({
+          pathname: "/api/login",
+          authenticated: false,
+          authMode: "password",
+        }),
+      ).toEqual({ type: "allow" });
+    });
+
+    it("allows the setup wizard, which is how the first password gets set", () => {
+      expect(
+        decideAccess({
+          pathname: "/setup",
+          authenticated: false,
+          authMode: "password",
+        }),
+      ).toEqual({ type: "allow" });
+    });
+
+    it("allows the setup endpoint, which guards itself once configured", () => {
+      expect(
+        decideAccess({
+          pathname: "/api/setup",
+          authenticated: false,
+          authMode: "password",
+        }),
+      ).toEqual({ type: "allow" });
+    });
+
     it("does not treat a path merely starting with /login as public", () => {
       expect(
         decideAccess({

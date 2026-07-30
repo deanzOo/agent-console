@@ -12,7 +12,18 @@ export interface AccessRequest {
   readonly authMode: AuthMode;
 }
 
-const PUBLIC_PATHS = new Set(["/login", "/manifest.webmanifest", "/sw.js"]);
+// /api/login is the gate itself, and /setup is the only way a first password
+// gets set — locking either behind a session deadlocks a fresh install. The
+// setup routes re-check authorization against the database, which is where
+// "has this been configured yet" can actually be answered.
+const PUBLIC_PATHS = new Set([
+  "/login",
+  "/api/login",
+  "/setup",
+  "/api/setup",
+  "/manifest.webmanifest",
+  "/sw.js",
+]);
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.has(pathname) || pathname.startsWith("/icons/");

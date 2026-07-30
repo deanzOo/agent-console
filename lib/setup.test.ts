@@ -4,7 +4,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { openDatabase, type Db } from "./db";
 import { getSetting, isSetupComplete, setSetting } from "./settings";
-import { applySetupStep, setupState, validateGithubToken } from "./setup";
+import {
+  applySetupStep,
+  canAccessSetup,
+  setupState,
+  validateGithubToken,
+} from "./setup";
 
 let dir: string;
 let db: Db;
@@ -116,5 +121,56 @@ describe("validateGithubToken", () => {
       vi.fn().mockResolvedValue(new Response("", { status: 403 })),
     );
     await expect(validateGithubToken("t")).rejects.toThrowError(/403/);
+  });
+});
+
+describe("canAccessSetup", () => {
+  it("allows an authenticated caller", () => {
+    expect(
+      canAccessSetup({ authenticated: true, authMode: "password", passwordSet: true }),
+    ).toBe(true);
+  });
+
+  it("allows an anonymous caller in password mode before a password exists", () => {
+    expect(
+      canAccessSetup({
+        authenticated: false,
+        authMode: "password",
+        passwordSet: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("denies an anonymous caller once a password is set", () => {
+    expect(
+      canAccessSetup({
+        authenticated: false,
+        authMode: "password",
+        passwordSet: false,
+      }),
+    ).toBe(true);
+    expect(
+      canAccessSetup({ authenticated: false, authMode: "password", passwordSet: true }),
+    ).toBe(false);
+  });
+
+  it("denies an anonymous caller under cloudflare-access, where reaching here means the edge was bypassed", () => {
+    expect(
+      canAccessSetup({
+        authenticated: false,
+        authMode: "cloudflare-access",
+        passwordSet: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("denies an anonymous caller under trusted-network, whose adapter always yields a user", () => {
+    expect(
+      canAccessSetup({
+        authenticated: false,
+        authMode: "trusted-network",
+        passwordSet: false,
+      }),
+    ).toBe(false);
   });
 });

@@ -1,6 +1,11 @@
 const MAX_BODY = 140;
 
-export type NotificationKind = "awaiting_input" | "done" | "failed";
+import { MISSION_STATUS } from "./schema";
+
+export type NotificationKind =
+  | typeof MISSION_STATUS.AWAITING_INPUT
+  | typeof MISSION_STATUS.DONE
+  | typeof MISSION_STATUS.FAILED;
 
 export interface NotificationInput {
   readonly kind: NotificationKind;
@@ -27,9 +32,9 @@ export interface DeliveryResult {
 }
 
 const HEADINGS: Record<NotificationKind, string> = {
-  awaiting_input: "Waiting on you",
-  done: "Mission finished",
-  failed: "Mission failed",
+  [MISSION_STATUS.AWAITING_INPUT]: "Waiting on you",
+  [MISSION_STATUS.DONE]: "Mission finished",
+  [MISSION_STATUS.FAILED]: "Mission failed",
 };
 
 function truncate(text: string, limit: number): string {
@@ -38,7 +43,9 @@ function truncate(text: string, limit: number): string {
 
 export function buildNotification(input: NotificationInput): Notification {
   const suffix =
-    input.kind === "awaiting_input" && input.toolName ? ` · ${input.toolName}` : "";
+    input.kind === MISSION_STATUS.AWAITING_INPUT && input.toolName
+      ? ` · ${input.toolName}`
+      : "";
   return {
     title: HEADINGS[input.kind],
     body: truncate(`${input.title}${suffix}`, MAX_BODY),

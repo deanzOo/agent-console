@@ -40,6 +40,11 @@
     "command": "npm run build"
   },
   {
+    "id": "smoke",
+    "name": "Smoke test",
+    "command": "npm run build && bash scripts/smoke-test.sh"
+  },
+  {
     "id": "audit",
     "name": "Dependency audit",
     "command": "npm audit --audit-level=high"
@@ -54,6 +59,6 @@
     "name": "Deep scan (secrets, IaC)",
     "command": "trivy fs --scanners secret,misconfig --severity HIGH,CRITICAL --exit-code 1 --quiet .",
     "requires": "trivy",
-    "installHint": "brew install trivy — or skip it locally; CI runs it on every push"
+    "installHint": "brew install trivy \u2014 or skip it locally; CI runs it on every push"
   }
 ]

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { OpenPrompt, StoredEvent } from "@/lib/missions";
+import { PROMPT_KIND } from "@/lib/schema";
 
 interface MissionView {
   readonly id: string;
@@ -50,7 +51,7 @@ export function MissionLive({
           ...current,
           {
             id: payload.promptId,
-            kind: "tool_approval",
+            kind: PROMPT_KIND.TOOL_APPROVAL,
             toolName: payload.toolName ?? null,
             input: payload.input,
             options: null,

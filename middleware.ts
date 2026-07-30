@@ -33,5 +33,8 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // Node runtime, not edge: the config parser reads node:path and node:os, and
+  // the edge runtime has no Node built-ins — every request 500s without this.
+  runtime: "nodejs",
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
