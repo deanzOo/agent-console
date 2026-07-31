@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { toTranscript } from "@agent-console/core/transcript";
+import { TranscriptRow } from "./transcript-row";
 
 // Close enough to the end that the reader is following along rather than
 // reading back through what already happened.
@@ -109,17 +111,9 @@ export function MissionLive({
         </p>
       </header>
 
-      <ol className="space-y-2">
-        {events.map((event) => (
-          <li
-            key={event.seq}
-            className="rounded border border-neutral-200 p-2 text-xs dark:border-neutral-800"
-          >
-            <span className="text-neutral-500">{event.type}</span>
-            <pre className="mt-1 overflow-x-auto break-words whitespace-pre-wrap">
-              {JSON.stringify(event.payload, null, 2)}
-            </pre>
-          </li>
+      <ol className="space-y-3">
+        {toTranscript(events).map((item) => (
+          <TranscriptRow key={item.seq} item={item} />
         ))}
       </ol>
       <div ref={bottom} />
