@@ -26,12 +26,15 @@ function needsInstallFirst(): boolean {
   return iOS && !installed;
 }
 
+// `window` is the only reliable "am I in a browser" check here: Node defines a
+// global `navigator` (for userAgent) but no `window`, so guarding on navigator
+// passes on the server and then throws the moment window is touched.
+function inBrowser(): boolean {
+  return typeof window !== "undefined";
+}
+
 function supported(): boolean {
-  return (
-    typeof navigator !== "undefined" &&
-    "serviceWorker" in navigator &&
-    "PushManager" in window
-  );
+  return inBrowser() && "serviceWorker" in navigator && "PushManager" in window;
 }
 
 export function PushToggle() {
@@ -40,10 +43,10 @@ export function PushToggle() {
   // that forbids it is right: an effect is for talking to the outside, not for
   // computing what render already knows.
   const [state, setState] = useState<State>(() =>
-    typeof navigator === "undefined" || supported() ? "checking" : "unsupported",
+    !inBrowser() || supported() ? "checking" : "unsupported",
   );
   const [hint, setHint] = useState<string>(() =>
-    typeof navigator !== "undefined" && !supported() && needsInstallFirst()
+    inBrowser() && !supported() && needsInstallFirst()
       ? "Add to Home Screen first, then enable."
       : "",
   );
