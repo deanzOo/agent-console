@@ -1,5 +1,6 @@
 "use client";
 
+import { MIN_PASSWORD_LENGTH } from "@agent-console/core/limits";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -69,7 +70,7 @@ export function SetupWizard({
       {state.needsPassword && (
         <Step title="Password" done={state.passwordSet} required>
           <Field
-            label="At least 12 characters"
+            label={`At least ${MIN_PASSWORD_LENGTH} characters`}
             type="password"
             busy={busy}
             onSubmit={(password) => submit({ step: "password", password })}

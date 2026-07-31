@@ -1,10 +1,9 @@
 import webpush from "web-push";
 import type { AuthMode } from "./env";
 import { hashPassword } from "./auth";
+import { MIN_PASSWORD_LENGTH } from "./limits";
 import type { Db } from "./db";
 import { getSetting, isSetupComplete, markSetupComplete, setSetting } from "./settings";
-
-const MIN_PASSWORD_LENGTH = 12;
 
 export interface SetupContext {
   readonly authMode: AuthMode;

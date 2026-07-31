@@ -70,7 +70,12 @@ describe("applySetupStep", () => {
   it("rejects a password too short to be worth hashing", async () => {
     await expect(
       applySetupStep(db, { step: "password", password: "short" }),
-    ).rejects.toThrowError(/12 characters/);
+    ).rejects.toThrowError(/8 characters/);
+  });
+
+  it("accepts a password at exactly the minimum", async () => {
+    await applySetupStep(db, { step: "password", password: "8charact" });
+    expect(getSetting(db, "password_hash")).toMatch(/^scrypt:/);
   });
 
   it("stores a github token", async () => {
