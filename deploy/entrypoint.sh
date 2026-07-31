@@ -14,7 +14,9 @@ node apps/agentd/dist/server.mjs &
 AGENTD_PID=$!
 
 shutdown() {
-  kill "$AGENTD_PID" "${WEB_PID:-}" 2>/dev/null
+  # ${WEB_PID:+...} so kill is never handed an empty argument, which it
+  # reports as an invalid pid when agentd died before the console started.
+  kill "$AGENTD_PID" ${WEB_PID:+"$WEB_PID"} 2>/dev/null
 }
 trap shutdown EXIT INT TERM
 

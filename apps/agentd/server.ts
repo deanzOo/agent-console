@@ -1,5 +1,4 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { z } from "zod";
 import { getConfig } from "@agent-console/core/env";
 import { getDatabase } from "@agent-console/core/db";
 import { getMission, listEvents } from "@agent-console/core/missions";
@@ -10,27 +9,8 @@ import {
   stopMission,
 } from "@agent-console/core/agents/manager";
 import { formatSseEvent, parseSince } from "@agent-console/core/sse";
+import { answerPromptSchema, launchMissionSchema } from "@agent-console/core/protocol";
 import { matchRoute } from "./routes";
-
-// The web app validates the operator's input; this validates what crosses the
-// process boundary, which is a separate trust boundary even on loopback.
-const launchSchema = z.object({
-  title: z.string().trim().min(1).max(200),
-  prompt: z.string().trim().min(1),
-  source: z.enum(["free", "github", "asana"]),
-  sourceRef: z.string().trim().min(1).optional(),
-  repo: z.string().trim().min(1).optional(),
-  base: z.string().trim().min(1).optional(),
-});
-
-const answerSchema = z.discriminatedUnion("decision", [
-  z.object({ promptId: z.string().min(1), decision: z.literal("allow") }),
-  z.object({
-    promptId: z.string().min(1),
-    decision: z.literal("deny"),
-    message: z.string().trim().min(1).default("Denied by the operator."),
-  }),
-]);
 
 const HEARTBEAT_MS = 25_000;
 const MAX_BODY_BYTES = 1_000_000;
@@ -110,7 +90,7 @@ async function handle(
   }
 
   if (route.kind === "launch") {
-    const parsed = launchSchema.safeParse(await readJson(request));
+    const parsed = launchMissionSchema.safeParse(await readJson(request));
     if (!parsed.success) {
       json(response, 400, { error: "invalid_request", issues: parsed.error.issues });
       return;
@@ -139,6 +119,14 @@ async function handle(
     return;
   }
 
+  // Stopping is idempotent and must work for a mission whose session is
+  // already gone — otherwise a half-dead mission can never be cleaned up.
+  if (route.action === "stop") {
+    await stopMission(route.id);
+    json(response, 200, { ok: true });
+    return;
+  }
+
   const session = getSession(route.id);
   if (!session) {
     json(response, 409, { error: "session_not_running" });
@@ -151,13 +139,7 @@ async function handle(
     return;
   }
 
-  if (route.action === "stop") {
-    await stopMission(route.id);
-    json(response, 200, { ok: true });
-    return;
-  }
-
-  const parsed = answerSchema.safeParse(await readJson(request));
+  const parsed = answerPromptSchema.safeParse(await readJson(request));
   if (!parsed.success) {
     json(response, 400, { error: "invalid_request", issues: parsed.error.issues });
     return;

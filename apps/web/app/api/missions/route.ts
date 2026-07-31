@@ -1,22 +1,10 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { getDatabase } from "@agent-console/core/db";
 import { countAwaitingInput, listMissions } from "@agent-console/core/missions";
+import { launchMissionSchema } from "@agent-console/core/protocol";
 import { launchMission } from "@/lib/agentd";
 
 export const dynamic = "force-dynamic";
-
-const createSchema = z.object({
-  title: z.string().trim().min(1).max(200),
-  prompt: z.string().trim().min(1),
-  source: z.enum(["free", "github", "asana"]).default("free"),
-  sourceRef: z.string().trim().min(1).optional(),
-  repo: z
-    .string()
-    .regex(/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/, "expected owner/repo")
-    .optional(),
-  base: z.string().trim().min(1).optional(),
-});
 
 export function GET() {
   const db = getDatabase();
@@ -27,7 +15,7 @@ export function GET() {
 }
 
 export async function POST(request: Request) {
-  const parsed = createSchema.safeParse(await request.json());
+  const parsed = launchMissionSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json(
       { error: "invalid_request", issues: parsed.error.issues },

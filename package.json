@@ -16,7 +16,7 @@
     "build": "npm run build -w @agent-console/web",
     "start": "npm run start -w @agent-console/web",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p packages/core && tsc --noEmit -p apps/web",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p packages/core && tsc --noEmit -p apps/web && tsc --noEmit -p apps/agentd",
     "dupes": "jscpd",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

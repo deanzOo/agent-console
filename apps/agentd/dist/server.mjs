@@ -7,6 +7,10 @@ var __export = (target, all) => {
 // server.ts
 import { createServer } from "node:http";
 
+// ../../packages/core/env.ts
+import path from "node:path";
+import { homedir as osHomedir } from "node:os";
+
 // ../../node_modules/zod/v4/classic/external.js
 var external_exports = {};
 __export(external_exports, {
@@ -14522,8 +14526,6 @@ function date4(params) {
 config(en_default());
 
 // ../../packages/core/env.ts
-import path from "node:path";
-import { homedir as osHomedir } from "node:os";
 var AUTH_MODES = ["cloudflare-access", "password", "trusted-network"];
 var EnvError = class extends Error {
   name = "EnvError";
@@ -20911,6 +20913,26 @@ data: ${JSON.stringify(event)}
 `;
 }
 
+// ../../packages/core/protocol.ts
+var REPO_FULL_NAME = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
+var launchMissionSchema = external_exports.object({
+  title: external_exports.string().trim().min(1).max(200),
+  prompt: external_exports.string().trim().min(1),
+  source: external_exports.enum(MISSION_SOURCES),
+  sourceRef: external_exports.string().trim().min(1).optional(),
+  repo: external_exports.string().regex(REPO_FULL_NAME, "expected owner/repo").optional(),
+  base: external_exports.string().trim().min(1).optional()
+});
+var DEFAULT_DENIAL_MESSAGE = "Denied by the operator.";
+var answerPromptSchema = external_exports.discriminatedUnion("decision", [
+  external_exports.object({ promptId: external_exports.string().min(1), decision: external_exports.literal("allow") }),
+  external_exports.object({
+    promptId: external_exports.string().min(1),
+    decision: external_exports.literal("deny"),
+    message: external_exports.string().trim().min(1).default(DEFAULT_DENIAL_MESSAGE)
+  })
+]);
+
 // routes.ts
 var ACTIONS = {
   answer: { action: "answer", method: "POST" },
@@ -20936,22 +20958,6 @@ function matchRoute(request) {
 }
 
 // server.ts
-var launchSchema = external_exports.object({
-  title: external_exports.string().trim().min(1).max(200),
-  prompt: external_exports.string().trim().min(1),
-  source: external_exports.enum(["free", "github", "asana"]),
-  sourceRef: external_exports.string().trim().min(1).optional(),
-  repo: external_exports.string().trim().min(1).optional(),
-  base: external_exports.string().trim().min(1).optional()
-});
-var answerSchema = external_exports.discriminatedUnion("decision", [
-  external_exports.object({ promptId: external_exports.string().min(1), decision: external_exports.literal("allow") }),
-  external_exports.object({
-    promptId: external_exports.string().min(1),
-    decision: external_exports.literal("deny"),
-    message: external_exports.string().trim().min(1).default("Denied by the operator.")
-  })
-]);
 var HEARTBEAT_MS = 25e3;
 var MAX_BODY_BYTES = 1e6;
 function json2(response, status, body) {
@@ -21008,7 +21014,7 @@ async function handle(request, response) {
     return;
   }
   if (route.kind === "launch") {
-    const parsed2 = launchSchema.safeParse(await readJson(request));
+    const parsed2 = launchMissionSchema.safeParse(await readJson(request));
     if (!parsed2.success) {
       json2(response, 400, { error: "invalid_request", issues: parsed2.error.issues });
       return;
@@ -21033,6 +21039,11 @@ async function handle(request, response) {
     );
     return;
   }
+  if (route.action === "stop") {
+    await stopMission(route.id);
+    json2(response, 200, { ok: true });
+    return;
+  }
   const session = getSession(route.id);
   if (!session) {
     json2(response, 409, { error: "session_not_running" });
@@ -21043,12 +21054,7 @@ async function handle(request, response) {
     json2(response, 200, { ok: true });
     return;
   }
-  if (route.action === "stop") {
-    await stopMission(route.id);
-    json2(response, 200, { ok: true });
-    return;
-  }
-  const parsed = answerSchema.safeParse(await readJson(request));
+  const parsed = answerPromptSchema.safeParse(await readJson(request));
   if (!parsed.success) {
     json2(response, 400, { error: "invalid_request", issues: parsed.error.issues });
     return;
