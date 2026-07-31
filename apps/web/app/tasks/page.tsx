@@ -2,7 +2,11 @@ import { notFound } from "next/navigation";
 import { getConfig } from "@agent-console/core/env";
 import { getFeatures } from "@agent-console/core/features";
 import { getDatabase } from "@agent-console/core/db";
-import { listTaskPage, listTaskProjects } from "@agent-console/core/tasks";
+import {
+  listTaskPage,
+  listTaskProjects,
+  listTaskWorkspaces,
+} from "@agent-console/core/tasks";
 import { resolveCredentials } from "@agent-console/core/settings";
 import { FilterBar } from "../filter-bar";
 import { Pager } from "../pager";
@@ -15,9 +19,15 @@ const PAGE_SIZE = 25;
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; project?: string; view?: string; from?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    workspace?: string;
+    project?: string;
+    view?: string;
+    from?: string;
+  }>;
 }) {
-  const { q, project, view, from } = await searchParams;
+  const { q, workspace, project, view, from } = await searchParams;
   const offset = Math.max(0, Number.parseInt(from ?? "", 10) || 0);
   const completed = view === "completed";
   const db = getDatabase();
@@ -30,6 +40,7 @@ export default async function TasksPage({
   if (!getFeatures(resolved).asana) notFound();
 
   const { tasks, total } = listTaskPage(db, {
+    workspace,
     project,
     query: q,
     completed,
@@ -37,6 +48,7 @@ export default async function TasksPage({
     offset,
   });
   const projects = listTaskProjects(db);
+  const workspaces = listTaskWorkspaces(db);
 
   return (
     <main className="space-y-4">
@@ -45,6 +57,11 @@ export default async function TasksPage({
       <FilterBar
         placeholder="Search tasks"
         selectors={[
+          {
+            name: "workspace",
+            label: "All workspaces",
+            choices: workspaces.map((w) => ({ value: w.gid, label: w.name })),
+          },
           {
             name: "project",
             label: "All projects",
@@ -60,7 +77,7 @@ export default async function TasksPage({
 
       {tasks.length === 0 ? (
         <p className="text-sm text-neutral-500">
-          {q || project || completed
+          {q || workspace || project || completed
             ? "No task matches that filter."
             : "Nothing cached yet. Run a sync from the dashboard."}
         </p>

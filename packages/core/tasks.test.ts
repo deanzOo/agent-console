@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { openDatabase, type Db } from "./db";
 import { asanaCache } from "./schema";
-import { UNFILED, listTaskPage, listTaskProjects } from "./tasks";
+import { UNFILED, listTaskPage, listTaskProjects, listTaskWorkspaces } from "./tasks";
 
 let dir: string;
 let db: Db;
@@ -15,10 +15,33 @@ const rows = [
     name: "Ship the invoice screen",
     project: "Billing",
     dueOn: "2026-08-02",
+    workspaceGid: "w1",
+    workspaceName: "Testy",
   },
-  { gid: "2", name: "Fix invoice rounding", project: "Billing", dueOn: "2026-08-01" },
-  { gid: "3", name: "Write the launch post", project: "Marketing", dueOn: null },
-  { gid: "4", name: "Unfiled thought", project: null, dueOn: "2026-08-05" },
+  {
+    gid: "2",
+    name: "Fix invoice rounding",
+    project: "Billing",
+    dueOn: "2026-08-01",
+    workspaceGid: "w1",
+    workspaceName: "Testy",
+  },
+  {
+    gid: "3",
+    name: "Write the launch post",
+    project: "Marketing",
+    dueOn: null,
+    workspaceGid: "w2",
+    workspaceName: "TimerMe",
+  },
+  {
+    gid: "4",
+    name: "Unfiled thought",
+    project: null,
+    dueOn: "2026-08-05",
+    workspaceGid: "w1",
+    workspaceName: "Testy",
+  },
   {
     gid: "5",
     name: "Old thing",
@@ -94,6 +117,42 @@ describe("listTaskPage", () => {
     const first = listTaskPage(db, { limit: 2 }).tasks.map((t) => t.gid);
     const second = listTaskPage(db, { limit: 2, offset: 2 }).tasks.map((t) => t.gid);
     expect(new Set([...first, ...second]).size).toBe(4);
+  });
+});
+
+describe("filtering by workspace", () => {
+  it("narrows to one workspace", () => {
+    expect(listTaskPage(db, { workspace: "w2" }).tasks.map((t) => t.gid)).toEqual([
+      "3",
+    ]);
+  });
+
+  it("counts only what is in that workspace", () => {
+    expect(listTaskPage(db, { workspace: "w1" }).total).toBe(3);
+  });
+
+  it("combines with a project and a search", () => {
+    const found = listTaskPage(db, {
+      workspace: "w1",
+      project: "Billing",
+      query: "rounding",
+    });
+    expect(found.tasks.map((t) => t.gid)).toEqual(["2"]);
+  });
+});
+
+describe("listTaskWorkspaces", () => {
+  it("lists each workspace once, by name", () => {
+    expect(listTaskWorkspaces(db)).toEqual([
+      { gid: "w1", name: "Testy" },
+      { gid: "w2", name: "TimerMe" },
+    ]);
+  });
+
+  // A workspace whose name never arrived is still a thing you can filter by.
+  it("falls back to the gid when there is no name", () => {
+    db.$client.prepare("UPDATE asana_cache SET workspace_name = NULL").run();
+    expect(listTaskWorkspaces(db)[0]).toEqual({ gid: "w1", name: "w1" });
   });
 });
 

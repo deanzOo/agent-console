@@ -4,10 +4,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { openDatabase, type Db } from "./db";
 import { syncAsana } from "./sync";
+import { listTaskPage } from "./tasks";
 
 interface MockState {
   searched: string[];
-  workspaces: { gid: string }[];
+  workspaces: { gid: string; name?: string }[];
 }
 
 const state: MockState = { searched: [], workspaces: [] };
@@ -43,7 +44,10 @@ let db: Db;
 
 beforeEach(() => {
   state.searched = [];
-  state.workspaces = [{ gid: "w1" }, { gid: "w2" }];
+  state.workspaces = [
+    { gid: "w1", name: "Testy" },
+    { gid: "w2", name: "TimerMe" },
+  ];
   stubAsana();
   dir = mkdtempSync(path.join(tmpdir(), "asana-"));
   db = openDatabase(path.join(dir, "data.db"), path.join(process.cwd(), "drizzle"));
@@ -94,5 +98,33 @@ describe("syncAsana", () => {
   it("stores what it found", async () => {
     await syncAsana(db, "token");
     expect(db.$client.prepare("SELECT gid FROM asana_cache").all()).toHaveLength(2);
+  });
+
+  // Without this a task cannot say which workspace it came from, and the list
+  // cannot be filtered by one.
+  it("records the workspace each task came from", async () => {
+    await syncAsana(db, "token");
+
+    const rows = listTaskPage(db, {}).tasks;
+    const byGid = new Map(rows.map((t) => [t.gid, t]));
+
+    expect(byGid.get("t1")).toMatchObject({
+      workspaceGid: "w1",
+      workspaceName: "Testy",
+    });
+    expect(byGid.get("t2")).toMatchObject({
+      workspaceGid: "w2",
+      workspaceName: "TimerMe",
+    });
+  });
+
+  it("survives a workspace with no name", async () => {
+    state.workspaces = [{ gid: "w1" }];
+    await syncAsana(db, "token");
+
+    expect(listTaskPage(db, {}).tasks[0]).toMatchObject({
+      workspaceGid: "w1",
+      workspaceName: null,
+    });
   });
 });

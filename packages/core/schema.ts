@@ -148,6 +148,10 @@ export const asanaCache = sqliteTable("asana_cache", {
   permalink: text("permalink"),
   completed: integer("completed", { mode: "boolean" }).notNull().default(false),
   updatedAt: text("updated_at"),
+  // The gid is the stable identity to filter on; the name is what a person
+  // picks. Both arrive from the same /workspaces call the sync already makes.
+  workspaceGid: text("workspace_gid"),
+  workspaceName: text("workspace_name"),
 });
 
 export const pushSubscriptions = sqliteTable("push_subscriptions", {

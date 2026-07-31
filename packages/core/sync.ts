@@ -122,31 +122,45 @@ async function asanaJson(token: string, path: string): Promise<unknown> {
   return body;
 }
 
-function workspaceGids(payload: unknown): string[] {
+interface AsanaWorkspace {
+  readonly gid: string;
+  readonly name: string | null;
+}
+
+function workspacesOf(payload: unknown): AsanaWorkspace[] {
   const listed: unknown = Object(payload).data ?? payload;
   if (!Array.isArray(listed)) return [];
 
   return listed
-    .map((entry) => Object(entry).gid)
-    .filter((gid): gid is string => typeof gid === "string");
+    .map((entry) => ({
+      gid: Object(entry).gid,
+      name: typeof Object(entry).name === "string" ? Object(entry).name : null,
+    }))
+    .filter(
+      (workspace): workspace is AsanaWorkspace => typeof workspace.gid === "string",
+    );
 }
 
 export async function syncAsana(db: Db, token: string): Promise<AsanaSync> {
   const listed = await asanaJson(token, "/workspaces");
   // Every workspace, not the first one. An account with its tasks in the second
   // got zero results and a report of success.
-  const gids = workspaceGids(listed);
+  const workspaces = workspacesOf(listed);
 
   let total = 0;
-  for (const workspace of gids) {
+  for (const workspace of workspaces) {
     // Assigned to you and not yet completed. `completed_since=now` is Asana's
     // way of saying "incomplete only" on this endpoint.
     const found = await asanaJson(
       token,
-      `/tasks?workspace=${workspace}&assignee=me&completed_since=now` +
+      `/tasks?workspace=${workspace.gid}&assignee=me&completed_since=now` +
         `&limit=${ASANA_TASK_LIMIT}&opt_fields=${ASANA_TASK_FIELDS}`,
     );
-    const tasks = parseAsanaTasks(found);
+    const tasks = parseAsanaTasks(found).map((task) => ({
+      ...task,
+      workspaceGid: workspace.gid,
+      workspaceName: workspace.name,
+    }));
 
     db.transaction((tx) => {
       for (const task of tasks) {
@@ -159,7 +173,7 @@ export async function syncAsana(db: Db, token: string): Promise<AsanaSync> {
     total += tasks.length;
   }
 
-  return { tasks: total, workspaces: gids.length };
+  return { tasks: total, workspaces: workspaces.length };
 }
 
 export async function gitVersion(): Promise<string> {
