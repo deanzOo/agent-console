@@ -18,7 +18,6 @@ export default defineConfig({
         // I/O shells with no branching of their own. Their logic lives in
         // tested modules: repos.ts for paths, session.ts for the agent loop.
         "lib/git.ts",
-        "lib/agents/driver.ts",
         "lib/agents/manager.ts",
         "lib/push.ts",
         "lib/sync.ts",
