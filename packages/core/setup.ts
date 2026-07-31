@@ -2,6 +2,10 @@ import webpush from "web-push";
 import type { AuthMode } from "./env";
 import { hashPassword } from "./auth";
 import { MIN_PASSWORD_LENGTH } from "./limits";
+
+// The subject identifies the sender to Apple, Google and Mozilla. They accept
+// only these two forms.
+const PUSH_CONTACT = /^(mailto:[^\s@]+@[^\s@]+\.[^\s@]+|https:\/\/\S+)$/;
 import type { Db } from "./db";
 import { getSetting, isSetupComplete, markSetupComplete, setSetting } from "./settings";
 
@@ -113,6 +117,14 @@ export async function applySetupStep(db: Db, input: SetupStep): Promise<void> {
       return;
     }
     case "push": {
+      // web-push rejects anything else when it signs, and the notifier swallows
+      // its errors — so a bare address here would pass setup and then deliver
+      // nothing, forever, with no failure visible anywhere.
+      if (!PUSH_CONTACT.test(input.subject)) {
+        throw new Error(
+          "Push contact must be a mailto: address or an https: URL, e.g. mailto:you@example.com",
+        );
+      }
       const keys = webpush.generateVAPIDKeys();
       setSetting(db, "vapid_public_key", keys.publicKey);
       setSetting(db, "vapid_private_key", keys.privateKey);
