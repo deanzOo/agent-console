@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, sql, type SQL } from "drizzle-orm";
 import type { Db } from "./db";
+import { titleContains } from "./issues";
 import {
   events,
   missions,
@@ -66,12 +67,26 @@ export function getMission(db: Db, id: string): Mission | undefined {
   return db.select().from(missions).where(eq(missions.id, id)).get();
 }
 
-export function listMissions(db: Db): Mission[] {
+export interface MissionFilter {
+  readonly status?: MissionStatus | undefined;
+  readonly query?: string | undefined;
+}
+
+export function listMissions(db: Db, filter: MissionFilter = {}): Mission[] {
+  const query = filter.query?.trim();
+  const conditions: SQL[] = [];
+
+  if (filter.status) conditions.push(eq(missions.status, filter.status));
+  if (query) {
+    conditions.push(titleContains(missions.title, query));
+  }
+
   // rowid breaks ties: two missions created in the same millisecond share a
   // createdAt, and ordering by a random uuid would shuffle them.
   return db
     .select()
     .from(missions)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(missions.createdAt), desc(sql`rowid`))
     .all();
 }
