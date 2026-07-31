@@ -34,7 +34,10 @@ ENV NODE_ENV=production \
     WORKSPACE_ROOT=/workspace \
     # The SDK would otherwise prefer the binary it ships, which is linked
     # against a libc this image does not have and fails at mission start.
-    CLAUDE_CLI_PATH=/usr/local/bin/claude
+    CLAUDE_CLI_PATH=/usr/local/bin/claude \
+    # next start runs from the web package, so a cwd-relative default would
+    # look for migrations inside apps/web and find nothing.
+    MIGRATIONS_DIR=/app/drizzle
 
 ARG GH_VERSION=2.96.0
 ARG TARGETARCH

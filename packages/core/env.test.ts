@@ -165,6 +165,19 @@ describe("parseEnv", () => {
       expect(parse().hasAnthropicCredential).toBe(false);
     });
 
+    // The app is started from the web package's directory, so a cwd-relative
+    // default finds nothing. Migrations then fail at boot with "Can't find
+    // meta/_journal.json", which names neither the path nor the cause.
+    it("reads an explicit migrations directory", () => {
+      expect(parse({ MIGRATIONS_DIR: "/srv/app/drizzle" }).migrationsDir).toBe(
+        "/srv/app/drizzle",
+      );
+    });
+
+    it("falls back to drizzle beside the working directory", () => {
+      expect(parse().migrationsDir).toBe(`${process.cwd()}/drizzle`);
+    });
+
     it("does not fail boot without one, since the CLI's own login may cover it", () => {
       expect(() => parse()).not.toThrow();
     });
