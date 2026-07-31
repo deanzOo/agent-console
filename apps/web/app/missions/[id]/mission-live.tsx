@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toTranscript } from "@agent-console/core/transcript";
+import { MissionActions } from "./mission-actions";
 import { TranscriptRow } from "./transcript-row";
 
 // Close enough to the end that the reader is following along rather than
@@ -16,6 +17,7 @@ interface MissionView {
   readonly status: string;
   readonly repo: string | null;
   readonly branch: string | null;
+  readonly worktreePath: string | null;
 }
 
 export function MissionLive({
@@ -109,6 +111,13 @@ export function MissionLive({
           {mission.repo ? ` · ${mission.repo}` : ""}
           {mission.branch ? ` · ${mission.branch}` : ""}
         </p>
+        <div className="mt-2">
+          <MissionActions
+            missionId={mission.id}
+            status={status}
+            hasWorktree={Boolean(mission.worktreePath)}
+          />
+        </div>
       </header>
 
       <ol className="space-y-3">

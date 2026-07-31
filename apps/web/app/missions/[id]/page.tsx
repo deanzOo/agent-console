@@ -23,6 +23,7 @@ export default async function MissionPage({
         status: mission.status,
         repo: mission.repo,
         branch: mission.branch,
+        worktreePath: mission.worktreePath,
       }}
       initialEvents={listEvents(db, id, 0)}
       initialPrompts={openPrompts(db, id)}
