@@ -230,6 +230,11 @@ place and not the other. **Add a check there and nowhere else.**
 
 Hooks are convenience, not the boundary — `--no-verify` skips them, so everything runs again in CI.
 
+**Remotely, the suite runs only on pushes to `main` and PRs whose base is `main`.** A stacked PR onto
+another feature branch runs nothing, so the whole stack costs one run instead of one per branch. Until a
+branch is proposed to `main`, `npm run ci` and the `pre-push` hook are the only signal — which is the reason
+local parity is a rule and not a nicety.
+
 ### Tooling must come from `node_modules`
 
 Anything a contributor needs should arrive with `npm ci`. If you reach for a tool, check for an npm-installable

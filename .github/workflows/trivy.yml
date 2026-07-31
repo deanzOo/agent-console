@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
   schedule:
     # Weekly, so newly-disclosed CVEs in unchanged dependencies still surface.
     - cron: "0 6 * * 1"

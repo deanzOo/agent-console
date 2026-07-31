@@ -1,9 +1,14 @@
 name: CI
 
+# Only what lands on a protected branch is gated remotely. A stacked PR whose
+# base is another feature branch runs nothing here — the full suite runs once,
+# on the PR that actually reaches main, rather than on every branch in the
+# stack. `npm run ci` and the pre-push hook are the signal until then.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
+    branches: [main]
 
 concurrency:
   group: ci-${{ github.ref }}
