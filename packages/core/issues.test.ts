@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { openDatabase, type Db } from "./db";
 import { issuesCache } from "./schema";
-import { listIssueLabels, listIssueOrgs, listIssueRepos, listIssues } from "./issues";
+import {
+  listIssueLabels,
+  listIssueOrgs,
+  listIssuePage,
+  listIssueRepos,
+  listIssues,
+} from "./issues";
 
 let dir: string;
 let db: Db;
@@ -91,6 +97,31 @@ describe("listIssues", () => {
 
   it("honours a limit", () => {
     expect(listIssues(db, { limit: 2 })).toHaveLength(2);
+  });
+
+  // Truncating without saying so is the failure this exists to prevent: the
+  // operator sees a short list and has no way to know it is not the whole one.
+  it("reports the total that matched, not the number returned", () => {
+    const page = listIssuePage(db, { limit: 2 });
+    expect(page.issues).toHaveLength(2);
+    expect(page.total).toBe(4);
+  });
+
+  it("counts what matches the filter, not the table", () => {
+    expect(listIssuePage(db, { repo: "acme/web" }).total).toBe(2);
+  });
+
+  it("returns the next page from an offset, with no overlap", () => {
+    const first = listIssuePage(db, { limit: 2 });
+    const second = listIssuePage(db, { limit: 2, offset: 2 });
+
+    expect(first.issues.map((i) => i.number)).toEqual([3, 7]);
+    expect(second.issues.map((i) => i.number)).toEqual([2, 1]);
+    expect(second.total).toBe(4);
+  });
+
+  it("returns nothing past the end rather than wrapping", () => {
+    expect(listIssuePage(db, { offset: 99 }).issues).toHaveLength(0);
   });
 });
 

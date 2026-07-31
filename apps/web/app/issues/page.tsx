@@ -5,21 +5,31 @@ import { getDatabase } from "@agent-console/core/db";
 import {
   listIssueLabels,
   listIssueOrgs,
+  listIssuePage,
   listIssueRepos,
-  listIssues,
 } from "@agent-console/core/issues";
 import { resolveCredentials } from "@agent-console/core/settings";
 import { FilterBar } from "../filter-bar";
+import { Pager } from "../pager";
 import { StartFromSource } from "../start-from-source";
 
 export const dynamic = "force-dynamic";
 
+const PAGE_SIZE = 25;
+
 export default async function IssuesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; org?: string; repo?: string; label?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    org?: string;
+    repo?: string;
+    label?: string;
+    from?: string;
+  }>;
 }) {
-  const { q, org, repo, label } = await searchParams;
+  const { q, org, repo, label, from } = await searchParams;
+  const offset = Math.max(0, Number.parseInt(from ?? "", 10) || 0);
   const db = getDatabase();
   const config = getConfig();
   const resolved = resolveCredentials(db, {
@@ -30,7 +40,14 @@ export default async function IssuesPage({
   // An unconfigured integration is absent, not broken.
   if (!getFeatures(resolved).github) notFound();
 
-  const issues = listIssues(db, { org, repo, label, query: q });
+  const { issues, total } = listIssuePage(db, {
+    org,
+    repo,
+    label,
+    query: q,
+    limit: PAGE_SIZE,
+    offset,
+  });
   // Each list is narrowed by the filters above it, so the choices on offer are
   // only ones that can actually match something.
   const orgs = listIssueOrgs(db);
@@ -93,6 +110,15 @@ export default async function IssuesPage({
             </li>
           ))}
         </ul>
+      )}
+
+      {issues.length > 0 && (
+        <Pager
+          total={total}
+          shown={issues.length}
+          offset={offset}
+          pageSize={PAGE_SIZE}
+        />
       )}
     </main>
   );

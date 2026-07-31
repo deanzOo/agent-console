@@ -5,6 +5,7 @@ import { issuesCache } from "./schema";
 export type CachedIssue = typeof issuesCache.$inferSelect;
 
 export interface IssueFilter {
+  readonly offset?: number | undefined;
   readonly org?: string | undefined;
   readonly repo?: string | undefined;
   readonly label?: string | undefined;
@@ -53,6 +54,30 @@ function conditionsFor(filter: IssueFilter): SQL[] {
   return conditions;
 }
 
+export interface IssuePage {
+  readonly issues: CachedIssue[];
+  readonly total: number;
+}
+
+/**
+ * A page of issues and how many matched in total.
+ *
+ * The count is the point: a list silently cut at the limit tells the operator
+ * they have seen everything when they have not.
+ */
+export function listIssuePage(db: Db, filter: IssueFilter): IssuePage {
+  const conditions = conditionsFor(filter);
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const counted = db
+    .select({ total: sql<number>`count(*)` })
+    .from(issuesCache)
+    .where(where)
+    .get();
+
+  return { issues: listIssues(db, filter), total: counted?.total ?? 0 };
+}
+
 export function listIssues(db: Db, filter: IssueFilter): CachedIssue[] {
   const conditions = conditionsFor(filter);
 
@@ -62,6 +87,7 @@ export function listIssues(db: Db, filter: IssueFilter): CachedIssue[] {
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(issuesCache.updatedAt))
     .limit(filter.limit ?? DEFAULT_LIMIT)
+    .offset(filter.offset ?? 0)
     .all();
 }
 

@@ -34,6 +34,9 @@ export function FilterBar({ placeholder, selectors }: Props) {
   const apply = useCallback(
     (changes: Record<string, string>) => {
       const next = new URLSearchParams(params.toString());
+      // Narrowing the list invalidates the page you were on: filtering while
+      // on page three otherwise lands on an empty page of a one-page result.
+      next.delete("from");
       for (const [key, value] of Object.entries(changes)) {
         if (value === "") next.delete(key);
         else next.set(key, value);
