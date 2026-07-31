@@ -6,19 +6,32 @@ import { formatSseEvent, parseSince } from "./sse";
 // newlines, control characters, unicode, whatever was in the file it just read.
 const payload = fc.jsonValue();
 
+// fc.string() emits printable ASCII only, so it would never produce the line
+// terminator this is about. The alphabet is spelled out for that reason.
+const typeName = fc
+  .array(fc.constantFrom("a", "z", ".", ":", " ", "\r", "\n", " "))
+  .map((chars) => chars.join(""));
+
 describe("SSE frames survive any payload", () => {
   it("keeps the frame to one data line, so a newline cannot split it", () => {
     fc.assert(
-      fc.property(fc.integer({ min: 1 }), fc.string(), payload, (seq, type, data) => {
+      fc.property(fc.integer({ min: 1 }), typeName, payload, (seq, type, data) => {
         const frame = formatSseEvent({
           seq,
           ts: "2026-01-01T00:00:00.000Z",
-          type: type.replace(/\n/g, ""),
+          type,
           payload: data,
         });
 
-        const dataLines = frame.split("\n").filter((line) => line.startsWith("data: "));
-        expect(dataLines).toHaveLength(1);
+        // A bare \r terminates a line under the SSE spec just as \n does, so
+        // splitting on \n alone would hide exactly the injection being tested.
+        // A frame is exactly three fields. Counting only recognised prefixes
+        // would miss an injected line that happens not to spell one.
+        const lines = frame.split(/\r\n|\r|\n/).filter((line) => line !== "");
+        expect(lines).toHaveLength(3);
+        expect(lines[0]?.startsWith("id: ")).toBe(true);
+        expect(lines[1]?.startsWith("event: ")).toBe(true);
+        expect(lines[2]?.startsWith("data: ")).toBe(true);
       }),
     );
   });

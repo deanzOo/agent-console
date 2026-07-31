@@ -1,9 +1,8 @@
 import path from "node:path";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { barePath, branchNameFor, worktreePath } from "./repos";
+import { MAX_BRANCH_LENGTH, barePath, branchNameFor, worktreePath } from "./repos";
 
-const MAX_BRANCH_LENGTH = 60;
 const WORKSPACE = "/srv/workspace";
 
 const segment = fc
@@ -43,7 +42,13 @@ describe("path derivation stays inside the workspace", () => {
   it("rejects a repo name that is not exactly owner/repo", () => {
     fc.assert(
       fc.property(
-        fc.string().filter((s) => !/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(s)),
+        fc.oneof(
+          fc.string().filter((s) => !/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(s)),
+          // Traversal names match the pattern, so the filter above excludes
+          // them — they need generating explicitly or the rejection they exist
+          // for is never exercised.
+          fc.constantFrom("owner/..", "../repo", "a/..", "../..", "..%2F.."),
+        ),
         (name) => {
           expect(() => barePath(WORKSPACE, name)).toThrow();
         },

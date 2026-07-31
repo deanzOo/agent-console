@@ -2,7 +2,7 @@ import path from "node:path";
 
 const REPO_PATTERN = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
 const MISSION_ID_PATTERN = /^[A-Za-z0-9-]+$/;
-const MAX_BRANCH_LENGTH = 60;
+export const MAX_BRANCH_LENGTH = 60;
 
 export function barePath(workspaceRoot: string, fullName: string): string {
   if (!REPO_PATTERN.test(fullName) || fullName.includes("..")) {
