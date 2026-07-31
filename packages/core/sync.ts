@@ -103,31 +103,50 @@ export async function syncRepos(db: Db, token: string): Promise<RepoSync> {
   return { all: names, withOpenIssues };
 }
 
-export async function syncAsana(db: Db, token: string): Promise<number> {
-  const result = await callTool(asanaServer(token), "asana_list_workspaces", {});
-  const workspaces = readToolJson(result);
-  const first = Object(Object(workspaces).data ?? workspaces)[0];
-  const workspaceGid = Object(first).gid;
-  if (typeof workspaceGid !== "string") return 0;
+export interface AsanaSync {
+  readonly tasks: number;
+  /** How many were actually searched, so "0 tasks" cannot hide "looked in one". */
+  readonly workspaces: number;
+}
 
-  const tasksResult = await callTool(asanaServer(token), "asana_search_tasks", {
-    workspace: workspaceGid,
-    completed: false,
-    limit: 50,
-  });
+const ASANA_TASK_LIMIT = 50;
 
-  const tasks = parseAsanaTasks(readToolJson(tasksResult));
+function workspaceGids(payload: unknown): string[] {
+  const listed: unknown = Object(payload).data ?? payload;
+  if (!Array.isArray(listed)) return [];
 
-  db.transaction((tx) => {
-    for (const task of tasks) {
-      tx.insert(asanaCache)
-        .values(task)
-        .onConflictDoUpdate({ target: asanaCache.gid, set: task })
-        .run();
-    }
-  });
+  return listed
+    .map((entry) => Object(entry).gid)
+    .filter((gid): gid is string => typeof gid === "string");
+}
 
-  return tasks.length;
+export async function syncAsana(db: Db, token: string): Promise<AsanaSync> {
+  const listed = await callTool(asanaServer(token), "asana_list_workspaces", {});
+  // Every workspace, not the first one. An account with its tasks in the second
+  // got zero results and a report of success.
+  const gids = workspaceGids(readToolJson(listed));
+
+  let total = 0;
+  for (const workspace of gids) {
+    const found = await callTool(asanaServer(token), "asana_search_tasks", {
+      workspace,
+      completed: false,
+      limit: ASANA_TASK_LIMIT,
+    });
+    const tasks = parseAsanaTasks(readToolJson(found));
+
+    db.transaction((tx) => {
+      for (const task of tasks) {
+        tx.insert(asanaCache)
+          .values(task)
+          .onConflictDoUpdate({ target: asanaCache.gid, set: task })
+          .run();
+      }
+    });
+    total += tasks.length;
+  }
+
+  return { tasks: total, workspaces: gids.length };
 }
 
 export async function gitVersion(): Promise<string> {
