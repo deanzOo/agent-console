@@ -22,18 +22,8 @@ services:
       # instead — and note macOS keeps that credential in the Keychain, not on
       # disk, so the mount carries nothing there.
       # - ${CLAUDE_CONFIG_DIR:-~/.claude}:/home/agent/.claude
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))",
-        ]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
+    # The healthcheck is defined on the image, so compose inherits it. Repeating
+    # it here would be a second copy of the same probe, free to drift.
 
 volumes:
   data:
