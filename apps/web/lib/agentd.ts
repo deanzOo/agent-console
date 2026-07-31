@@ -87,6 +87,14 @@ export function answerPrompt(
   );
 }
 
+export function stopMission(missionId: string): Promise<AgentdOutcome<unknown>> {
+  return send(
+    `/missions/${encodeURIComponent(missionId)}/stop`,
+    { method: "POST" },
+    asJson,
+  );
+}
+
 export function interruptMission(missionId: string): Promise<AgentdOutcome<unknown>> {
   return send(
     `/missions/${encodeURIComponent(missionId)}/interrupt`,
