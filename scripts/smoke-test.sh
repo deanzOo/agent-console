@@ -171,6 +171,12 @@ check /api/missions  401 "/api/missions (anonymous)"
 post /api/setup "{\"step\":\"password\",\"password\":\"$TEST_PASSWORD\"}" \
   200 "set the first password" "$JAR"
 
+# Configuring push is what makes the notifications toggle render at all. Until
+# it does, its server-side render is never exercised — and a browser-only global
+# touched during SSR takes down every page, not just this component.
+post_as_user /api/setup "{\"step\":\"push\",\"subject\":\"mailto:smoke@example.com\"}" \
+  200 "configure push" "$JAR"
+
 post_as_user /api/setup "{\"step\":\"finish\"}" 200 "finish setup with that session" "$JAR"
 post /api/setup "{\"step\":\"finish\"}" 401 "finish setup anonymously"
 
@@ -182,6 +188,8 @@ post /api/login "{\"password\":\"$TEST_PASSWORD\"}" 200 "login" "$JAR"
 
 check_as_user /setup        200 "$JAR"
 check_as_user /api/missions 200 "$JAR"
+# Renders the nav, and with push configured that includes the toggle.
+check_as_user /               200 "$JAR"
 
 rm -f "$JAR"
 stop_app
