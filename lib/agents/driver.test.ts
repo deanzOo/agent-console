@@ -52,4 +52,22 @@ describe("createSdkDriver", () => {
       permissionMode: "default",
     });
   });
+
+  // Stopping a mission and cleaning it up both go through here. A driver that
+  // swallowed either would leave a session running with nothing pointing at it.
+  it("forwards interrupt and close to the SDK handle", async () => {
+    getConfigMock.mockReturnValue({ claudeCliPath: undefined });
+    const run = createSdkDriver().start({
+      prompt: "hi",
+      cwd: "/tmp/wt",
+      canUseTool: async () => ({ behavior: "allow", updatedInput: {} }),
+    });
+    const handle = queryMock.mock.results.at(-1)?.value;
+
+    await run.interrupt();
+    run.close();
+
+    expect(handle?.interrupt).toHaveBeenCalledOnce();
+    expect(handle?.close).toHaveBeenCalledOnce();
+  });
 });
