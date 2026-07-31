@@ -16,3 +16,9 @@ data.db-wal
 data.db-shm
 
 .DS_Store
+
+# Build output. agentd is bundled at build time, not committed.
+dist/
+
+# Deployment target. scripts/deploy.sh is generic; this names your server.
+.deploy.env

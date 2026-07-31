@@ -63,6 +63,9 @@ export const missions = sqliteTable(
     createdAt: text("created_at").notNull().default(now),
     updatedAt: text("updated_at").notNull().default(now),
     lastSeq: integer("last_seq").notNull().default(0),
+    // Null means active. A timestamp both hides the mission and records when,
+    // which is the question an archive is asked: when did I stop caring.
+    archivedAt: text("archived_at"),
   },
   (table) => [
     index("missions_status_idx").on(table.status),
