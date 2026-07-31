@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+
+// Close enough to the end that the reader is following along rather than
+// reading back through what already happened.
+const FOLLOW_THRESHOLD_PX = 120;
 import type { OpenPrompt, StoredEvent } from "@agent-console/core/missions";
 import { PROMPT_KIND } from "@agent-console/core/schema";
 
@@ -75,8 +79,14 @@ export function MissionLive({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mission.id]);
 
+  // Follow the tail only when the reader is already there. Scrolling them back
+  // down after every message makes reading anything above impossible, and each
+  // approval produces several.
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: "smooth" });
+    const nearBottom =
+      window.innerHeight + window.scrollY >=
+      document.body.scrollHeight - FOLLOW_THRESHOLD_PX;
+    if (nearBottom) bottom.current?.scrollIntoView({ behavior: "smooth" });
   }, [events.length]);
 
   async function answer(promptId: string, decision: "allow" | "deny") {
@@ -99,10 +109,29 @@ export function MissionLive({
         </p>
       </header>
 
+      <ol className="space-y-2">
+        {events.map((event) => (
+          <li
+            key={event.seq}
+            className="rounded border border-neutral-200 p-2 text-xs dark:border-neutral-800"
+          >
+            <span className="text-neutral-500">{event.type}</span>
+            <pre className="mt-1 overflow-x-auto break-words whitespace-pre-wrap">
+              {JSON.stringify(event.payload, null, 2)}
+            </pre>
+          </li>
+        ))}
+      </ol>
+      <div ref={bottom} />
+
+      {/* Pinned to the bottom of the viewport: an approval that only exists at
+          the top of a long transcript has to be hunted for, and answering one
+          appends more output that moves it further away. */}
       {prompts.map((prompt) => (
         <section
           key={prompt.id}
-          className="rounded border border-amber-400 bg-amber-50 p-3 dark:bg-amber-950/40"
+          className="sticky bottom-0 z-10 rounded border border-amber-400 bg-amber-50 p-3 shadow-lg dark:bg-amber-950 dark:shadow-black/40"
+          style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
         >
           <p className="text-sm font-medium">
             Waiting on you: {prompt.toolName ?? "a question"}
@@ -126,21 +155,6 @@ export function MissionLive({
           </div>
         </section>
       ))}
-
-      <ol className="space-y-2">
-        {events.map((event) => (
-          <li
-            key={event.seq}
-            className="rounded border border-neutral-200 p-2 text-xs dark:border-neutral-800"
-          >
-            <span className="text-neutral-500">{event.type}</span>
-            <pre className="mt-1 overflow-x-auto break-words whitespace-pre-wrap">
-              {JSON.stringify(event.payload, null, 2)}
-            </pre>
-          </li>
-        ))}
-      </ol>
-      <div ref={bottom} />
     </main>
   );
 }
