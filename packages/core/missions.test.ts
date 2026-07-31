@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { openDatabase, type Db } from "./db";
+import { MISSION_STATUS } from "./schema";
 import {
   answerPrompt,
   appendEvent,
@@ -60,6 +61,49 @@ describe("createMission", () => {
 
   it("returns undefined for an unknown mission", () => {
     expect(getMission(db, "nope")).toBeUndefined();
+  });
+});
+
+describe("listMissions filtering", () => {
+  function seed(db: Db) {
+    const a = createMission(db, {
+      title: "Fix the login bug",
+      source: "free",
+      prompt: "p",
+    });
+    const b = createMission(db, {
+      title: "Add SEARCH to issues",
+      source: "free",
+      prompt: "p",
+    });
+    setStatus(db, b.id, MISSION_STATUS.AWAITING_INPUT);
+    return { a, b };
+  }
+
+  it("returns everything when nothing is asked for", () => {
+    seed(db);
+    expect(listMissions(db)).toHaveLength(2);
+  });
+
+  it("narrows to one status", () => {
+    const { b } = seed(db);
+    const found = listMissions(db, { status: MISSION_STATUS.AWAITING_INPUT });
+    expect(found.map((m) => m.id)).toEqual([b.id]);
+  });
+
+  it("searches titles without regard to case", () => {
+    const { b } = seed(db);
+    expect(listMissions(db, { query: "search" }).map((m) => m.id)).toEqual([b.id]);
+  });
+
+  it("treats LIKE wildcards as literal characters", () => {
+    seed(db);
+    expect(listMissions(db, { query: "%" })).toHaveLength(0);
+  });
+
+  it("ignores a blank query", () => {
+    seed(db);
+    expect(listMissions(db, { query: "  " })).toHaveLength(2);
   });
 });
 

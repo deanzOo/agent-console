@@ -1,15 +1,25 @@
 import { notFound } from "next/navigation";
-import { desc } from "drizzle-orm";
 import { getConfig } from "@agent-console/core/env";
 import { getFeatures } from "@agent-console/core/features";
 import { getDatabase } from "@agent-console/core/db";
-import { issuesCache } from "@agent-console/core/schema";
+import {
+  listIssueLabels,
+  listIssueOrgs,
+  listIssueRepos,
+  listIssues,
+} from "@agent-console/core/issues";
 import { resolveCredentials } from "@agent-console/core/settings";
+import { FilterBar } from "../filter-bar";
 import { StartFromSource } from "../start-from-source";
 
 export const dynamic = "force-dynamic";
 
-export default function IssuesPage() {
+export default async function IssuesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; org?: string; repo?: string; label?: string }>;
+}) {
+  const { q, org, repo, label } = await searchParams;
   const db = getDatabase();
   const config = getConfig();
   const resolved = resolveCredentials(db, {
@@ -20,20 +30,46 @@ export default function IssuesPage() {
   // An unconfigured integration is absent, not broken.
   if (!getFeatures(resolved).github) notFound();
 
-  const issues = db
-    .select()
-    .from(issuesCache)
-    .orderBy(desc(issuesCache.updatedAt))
-    .limit(100)
-    .all();
+  const issues = listIssues(db, { org, repo, label, query: q });
+  // Each list is narrowed by the filters above it, so the choices on offer are
+  // only ones that can actually match something.
+  const orgs = listIssueOrgs(db);
+  const repos = listIssueRepos(db, { org });
+  const labels = listIssueLabels(db, { org, repo });
 
   return (
     <main className="space-y-4">
       <h1 className="text-lg font-semibold">Open issues</h1>
 
+      <FilterBar
+        placeholder="Search issues"
+        selectors={[
+          {
+            name: "org",
+            label: "All orgs",
+            choices: orgs.map((name) => ({ value: name, label: name })),
+          },
+          {
+            name: "repo",
+            label: "All repositories",
+            choices: repos.map((name) => ({
+              value: name,
+              label: name.split("/")[1] ?? name,
+            })),
+          },
+          {
+            name: "label",
+            label: "All labels",
+            choices: labels.map((name) => ({ value: name, label: name })),
+          },
+        ]}
+      />
+
       {issues.length === 0 ? (
         <p className="text-sm text-neutral-500">
-          Nothing cached yet. Run a sync from the dashboard.
+          {q || org || repo || label
+            ? "No issue matches that filter."
+            : "Nothing cached yet. Run a sync from the dashboard."}
         </p>
       ) : (
         <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">

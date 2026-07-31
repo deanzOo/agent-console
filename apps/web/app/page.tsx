@@ -2,7 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDatabase } from "@agent-console/core/db";
 import { countAwaitingInput, listMissions } from "@agent-console/core/missions";
+import { MISSION_STATUSES } from "@agent-console/core/schema";
 import { isSetupComplete } from "@agent-console/core/settings";
+import { FilterBar } from "./filter-bar";
 import { NewMissionForm } from "./new-mission-form";
 
 export const dynamic = "force-dynamic";
@@ -16,13 +18,22 @@ const STATUS_STYLES: Record<string, string> = {
   stopped: "bg-neutral-100 text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300",
 };
 
-export default function Dashboard() {
+function asStatus(value: string | undefined) {
+  return MISSION_STATUSES.find((status) => status === value);
+}
+
+export default async function Dashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string }>;
+}) {
+  const { q, status } = await searchParams;
   const db = getDatabase();
   // First run lands on the wizard. Every other page is reached from here, so
   // one check covers the app without risking a redirect loop on /setup itself.
   if (!isSetupComplete(db)) redirect("/setup");
 
-  const missions = listMissions(db);
+  const missions = listMissions(db, { query: q, status: asStatus(status) });
   const waiting = countAwaitingInput(db);
 
   return (
@@ -38,8 +49,24 @@ export default function Dashboard() {
 
       <NewMissionForm />
 
+      <FilterBar
+        placeholder="Search missions"
+        selectors={[
+          {
+            name: "status",
+            label: "Any status",
+            choices: MISSION_STATUSES.map((value) => ({
+              value,
+              label: value.replace("_", " "),
+            })),
+          },
+        ]}
+      />
+
       {missions.length === 0 ? (
-        <p className="text-sm text-neutral-500">No missions yet.</p>
+        <p className="text-sm text-neutral-500">
+          {q || status ? "No mission matches that filter." : "No missions yet."}
+        </p>
       ) : (
         <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">
           {missions.map((mission) => (
