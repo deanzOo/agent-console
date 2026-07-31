@@ -2,23 +2,16 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { Db } from "./db";
 import { asanaCache, issuesCache, repos } from "./schema";
-import { callTool, type ServerSpec } from "./mcp/client";
-import { parseAsanaTasks, parseGithubIssues, readToolJson } from "./mcp/parse";
+import { parseAsanaTasks, parseGithubIssues } from "./mcp/parse";
 
 const run = promisify(execFile);
 
-function asanaServer(token: string): ServerSpec {
-  return {
-    name: "asana",
-    command: "npx",
-    args: ["-y", "@roychri/mcp-server-asana"],
-    env: { ASANA_ACCESS_TOKEN: token },
-  };
-}
-
-// GitHub goes through the REST API rather than an MCP server: the token is
-// already required for cloning, and `fetch` is fewer moving parts than a child
-// process for what is a plain list call.
+// Both integrations go through plain REST rather than an MCP server. For GitHub
+// the token is already required for cloning. For Asana the search endpoint the
+// MCP server calls is premium-only — it answers "Search is only available to
+// premium users", which arrived as an empty result and looked like success.
+// This also removes an `npx` download at runtime inside the container.
+// Supersedes the Asana half of ADR-0002.
 async function githubJson(token: string, path: string): Promise<unknown> {
   const response = await fetch(`https://api.github.com${path}`, {
     headers: {
@@ -103,31 +96,70 @@ export async function syncRepos(db: Db, token: string): Promise<RepoSync> {
   return { all: names, withOpenIssues };
 }
 
-export async function syncAsana(db: Db, token: string): Promise<number> {
-  const result = await callTool(asanaServer(token), "asana_list_workspaces", {});
-  const workspaces = readToolJson(result);
-  const first = Object(Object(workspaces).data ?? workspaces)[0];
-  const workspaceGid = Object(first).gid;
-  if (typeof workspaceGid !== "string") return 0;
+export interface AsanaSync {
+  readonly tasks: number;
+  /** How many were actually searched, so "0 tasks" cannot hide "looked in one". */
+  readonly workspaces: number;
+}
 
-  const tasksResult = await callTool(asanaServer(token), "asana_search_tasks", {
-    workspace: workspaceGid,
-    completed: false,
-    limit: 50,
+const ASANA_TASK_LIMIT = 50;
+// The list endpoint returns gid and name only unless asked for more.
+const ASANA_TASK_FIELDS =
+  "name,completed,due_on,permalink_url,modified_at,projects.name";
+
+async function asanaJson(token: string, path: string): Promise<unknown> {
+  const response = await fetch(`https://app.asana.com/api/1.0${path}`, {
+    headers: { authorization: `Bearer ${token}`, accept: "application/json" },
   });
+  const body: unknown = await response.json();
+  if (!response.ok) {
+    // Asana explains itself properly; passing that through beats "0 tasks".
+    const message = Object(Object(body).errors ?? [])[0];
+    throw new Error(
+      `Asana responded ${response.status}: ${Object(message).message ?? "unknown error"}`,
+    );
+  }
+  return body;
+}
 
-  const tasks = parseAsanaTasks(readToolJson(tasksResult));
+function workspaceGids(payload: unknown): string[] {
+  const listed: unknown = Object(payload).data ?? payload;
+  if (!Array.isArray(listed)) return [];
 
-  db.transaction((tx) => {
-    for (const task of tasks) {
-      tx.insert(asanaCache)
-        .values(task)
-        .onConflictDoUpdate({ target: asanaCache.gid, set: task })
-        .run();
-    }
-  });
+  return listed
+    .map((entry) => Object(entry).gid)
+    .filter((gid): gid is string => typeof gid === "string");
+}
 
-  return tasks.length;
+export async function syncAsana(db: Db, token: string): Promise<AsanaSync> {
+  const listed = await asanaJson(token, "/workspaces");
+  // Every workspace, not the first one. An account with its tasks in the second
+  // got zero results and a report of success.
+  const gids = workspaceGids(listed);
+
+  let total = 0;
+  for (const workspace of gids) {
+    // Assigned to you and not yet completed. `completed_since=now` is Asana's
+    // way of saying "incomplete only" on this endpoint.
+    const found = await asanaJson(
+      token,
+      `/tasks?workspace=${workspace}&assignee=me&completed_since=now` +
+        `&limit=${ASANA_TASK_LIMIT}&opt_fields=${ASANA_TASK_FIELDS}`,
+    );
+    const tasks = parseAsanaTasks(found);
+
+    db.transaction((tx) => {
+      for (const task of tasks) {
+        tx.insert(asanaCache)
+          .values(task)
+          .onConflictDoUpdate({ target: asanaCache.gid, set: task })
+          .run();
+      }
+    });
+    total += tasks.length;
+  }
+
+  return { tasks: total, workspaces: gids.length };
 }
 
 export async function gitVersion(): Promise<string> {
