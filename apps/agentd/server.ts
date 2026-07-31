@@ -226,6 +226,14 @@ const config = getConfig();
 
 const server = createServer((request, response) => {
   handle(request, response).catch((error: unknown) => {
+    // Logged as well as returned: the response goes to whoever asked, and when
+    // that is a fetch inside a route handler the reason is lost the moment the
+    // request ends. This is the only place that keeps it.
+    process.stderr.write(
+      `agentd: ${request.method} ${request.url} failed: ${
+        error instanceof Error ? error.message : String(error)
+      }\n`,
+    );
     if (!response.headersSent) {
       json(response, 500, { error: error instanceof Error ? error.message : "failed" });
       return;

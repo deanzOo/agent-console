@@ -1,7 +1,13 @@
 import { mkdirSync } from "node:fs";
 import { getConfig } from "../env";
-import { getDatabase } from "../db";
-import { getMission, setStatus, type MissionSource } from "../missions";
+import { getDatabase, type Db } from "../db";
+import {
+  appendEvent,
+  getMission,
+  recordWorkspace,
+  setStatus,
+  type MissionSource,
+} from "../missions";
 import { branchNameFor } from "../repos";
 import { createWorktree, defaultBranch, ensureBareClone } from "../git";
 import { createSdkDriver } from "./driver";
@@ -42,7 +48,7 @@ export async function launchMission(input: LaunchInput): Promise<string> {
   });
 
   try {
-    const cwd = (await prepareWorkspace(mission.id, input)) ?? config.workspaceRoot;
+    const cwd = (await prepareWorkspace(db, mission.id, input)) ?? config.workspaceRoot;
     // A missing cwd makes the spawn fail with ENOENT, which the Agent SDK
     // reports as the binary being unlaunchable — an error naming libc and the
     // dynamic loader, nowhere near the actual cause. Same reason db.ts creates
@@ -64,6 +70,13 @@ export async function launchMission(input: LaunchInput): Promise<string> {
     // and handed out by getSession() for a mission that never ran.
     sessions.delete(mission.id);
     setStatus(db, mission.id, "failed");
+    // Without this the transcript is silent about why: the mission shows as
+    // failed and the only account of the reason went back in an HTTP response
+    // nobody kept.
+    appendEvent(db, mission.id, "mission.status", {
+      status: "failed",
+      error: error instanceof Error ? error.message : String(error),
+    });
     throw error;
   }
 
@@ -71,6 +84,7 @@ export async function launchMission(input: LaunchInput): Promise<string> {
 }
 
 async function prepareWorkspace(
+  db: Db,
   missionId: string,
   input: LaunchInput,
 ): Promise<string | undefined> {
@@ -81,13 +95,20 @@ async function prepareWorkspace(
 
   const bare = await ensureBareClone(env, input.repo);
   const base = input.base ?? (await defaultBranch(bare));
+  const branch = branchNameFor(input.title, missionId);
 
-  return createWorktree(env, {
+  const worktreePath = await createWorktree(env, {
     fullName: input.repo,
     missionId,
-    branch: branchNameFor(input.title, missionId),
-    base: `origin/${base}`,
+    branch,
+    // A bare clone holds branches in refs/heads and creates no remote-tracking
+    // refs, so the base is the branch name itself. "origin/main" names nothing
+    // there, and every repo-backed mission died on it.
+    base,
   });
+
+  recordWorkspace(db, missionId, { branch, worktreePath });
+  return worktreePath;
 }
 
 export async function stopMission(missionId: string): Promise<void> {

@@ -131,6 +131,19 @@ export function setStatus(db: Db, id: string, status: MissionStatus): void {
     .run();
 }
 
+export interface WorkspaceRecord {
+  readonly branch: string;
+  readonly worktreePath: string;
+}
+
+/** The row exists before the worktree does, so the pair is written back here. */
+export function recordWorkspace(db: Db, id: string, input: WorkspaceRecord): void {
+  db.update(missions)
+    .set({ branch: input.branch, worktreePath: input.worktreePath })
+    .where(eq(missions.id, id))
+    .run();
+}
+
 export function setSessionId(db: Db, id: string, sessionId: string): void {
   db.update(missions).set({ sessionId }).where(eq(missions.id, id)).run();
 }

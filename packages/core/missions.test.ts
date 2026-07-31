@@ -12,6 +12,7 @@ import {
   createMission,
   getMission,
   listEvents,
+  recordWorkspace,
   restoreMission,
   listMissions,
   openPrompts,
@@ -63,6 +64,24 @@ describe("createMission", () => {
 
   it("returns undefined for an unknown mission", () => {
     expect(getMission(db, "nope")).toBeUndefined();
+  });
+});
+
+describe("recordWorkspace", () => {
+  // The row is created before the worktree exists, so without this the mission
+  // never records which branch it worked on or which tree to clean up.
+  it("stores the branch and worktree once they exist", () => {
+    const m = createMission(db, { title: "t", source: "github", prompt: "p" });
+    expect(m.branch).toBeNull();
+
+    recordWorkspace(db, m.id, {
+      branch: "agent/thing-abc",
+      worktreePath: "/workspace/wt/abc",
+    });
+
+    const found = getMission(db, m.id);
+    expect(found?.branch).toBe("agent/thing-abc");
+    expect(found?.worktreePath).toBe("/workspace/wt/abc");
   });
 });
 
