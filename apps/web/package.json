@@ -1,0 +1,17 @@
+{
+  "name": "@agent-console/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The operator-facing console: pages, route handlers, auth middleware",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@agent-console/core": "*",
+    "next": "^16.2.12",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  }
+}

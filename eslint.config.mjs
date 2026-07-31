@@ -4,12 +4,14 @@ import next from "eslint-config-next";
 
 export default tseslint.config(
   {
+    // Matched at any depth: build output and generated files live inside each
+    // package now, not only at the repository root.
     ignores: [
-      ".next/**",
-      "node_modules/**",
-      "next-env.d.ts",
-      ".jscpd/**",
-      "coverage/**",
+      "**/.next/**",
+      "**/node_modules/**",
+      "**/next-env.d.ts",
+      "**/.jscpd/**",
+      "**/coverage/**",
     ],
   },
   js.configs.recommended,
