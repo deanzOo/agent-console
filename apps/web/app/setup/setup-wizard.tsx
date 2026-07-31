@@ -162,15 +162,31 @@ function Step({
   required?: boolean;
   children: React.ReactNode;
 }) {
+  // A configured step used to hide its form for good, so a token could be set
+  // exactly once and never rotated — and this page is the only place to set
+  // one. Configured means collapsed, not sealed.
+  const [replacing, setReplacing] = useState(false);
+
   return (
     <section className="rounded border border-neutral-200 p-3 dark:border-neutral-800">
-      <h2 className="mb-2 text-sm font-medium">
-        {title}{" "}
-        <span className="text-xs font-normal text-neutral-500">
-          {done ? "· configured" : required ? "· required" : "· optional"}
+      <h2 className="mb-2 flex items-center gap-2 text-sm font-medium">
+        <span>
+          {title}{" "}
+          <span className="text-xs font-normal text-neutral-500">
+            {done ? "· configured" : required ? "· required" : "· optional"}
+          </span>
         </span>
+        {done && (
+          <button
+            type="button"
+            onClick={() => setReplacing((open) => !open)}
+            className="ml-auto rounded border border-neutral-300 px-2 py-0.5 text-xs font-normal dark:border-neutral-700"
+          >
+            {replacing ? "Cancel" : "Replace"}
+          </button>
+        )}
       </h2>
-      {!done && children}
+      {(!done || replacing) && children}
     </section>
   );
 }
