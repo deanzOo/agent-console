@@ -1,6 +1,6 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { AUTH_MODES } from "@/config/env";
+import { AUTH_MODES } from "../env";
 import { decideAccess } from "./authorize";
 
 const authMode = fc.constantFrom(...AUTH_MODES);

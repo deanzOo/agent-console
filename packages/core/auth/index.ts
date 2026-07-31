@@ -1,4 +1,4 @@
-import type { AuthMode } from "@/config/env";
+import type { AuthMode } from "../env";
 import { createCloudflareAccessAdapter } from "./cloudflare";
 import { createPasswordAdapter } from "./password";
 import { createTrustedNetworkAdapter } from "./trusted";

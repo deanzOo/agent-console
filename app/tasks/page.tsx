@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
-import { getConfig } from "@/config/env";
-import { getFeatures } from "@/config/features";
-import { getDatabase } from "@/lib/db";
-import { asanaCache } from "@/lib/schema";
-import { resolveCredentials } from "@/lib/settings";
+import { getConfig } from "@agent-console/core/env";
+import { getFeatures } from "@agent-console/core/features";
+import { getDatabase } from "@agent-console/core/db";
+import { asanaCache } from "@agent-console/core/schema";
+import { resolveCredentials } from "@agent-console/core/settings";
 import { StartFromSource } from "../start-from-source";
 
 export const dynamic = "force-dynamic";

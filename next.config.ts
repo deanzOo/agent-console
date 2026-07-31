@@ -10,9 +10,9 @@ const nextConfig: NextConfig = {
     "@anthropic-ai/claude-agent-sdk",
     "@modelcontextprotocol/sdk",
   ],
-  outputFileTracingIncludes: {
-    "/**": ["./lib/schema.sql"],
-  },
+  // The core is a workspace package of TypeScript sources, not a built
+  // artefact, so Next compiles it rather than expecting it prebuilt.
+  transpilePackages: ["@agent-console/core"],
 };
 
 export default nextConfig;

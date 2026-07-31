@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getDatabase } from "@/lib/db";
-import { countAwaitingInput, listMissions } from "@/lib/missions";
-import { launchMission } from "@/lib/agents/manager";
+import { getDatabase } from "@agent-console/core/db";
+import { countAwaitingInput, listMissions } from "@agent-console/core/missions";
+import { launchMission } from "@agent-console/core/agents/manager";
 
 export const dynamic = "force-dynamic";
 

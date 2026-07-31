@@ -2,6 +2,10 @@
   "name": "claudevps",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "description": "Self-hosted control panel for Claude Code agents running on your own VPS",
   "license": "MIT",
   "engines": {
@@ -38,6 +42,7 @@
     ]
   },
   "dependencies": {
+    "@agent-console/core": "*",
     "@anthropic-ai/claude-agent-sdk": "^0.3.220",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "better-sqlite3": "^13.0.2",

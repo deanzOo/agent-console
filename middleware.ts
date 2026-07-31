@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getConfig } from "@/config/env";
-import { createAuthAdapter } from "@/lib/auth";
-import { decideAccess } from "@/lib/auth/authorize";
+import { getConfig } from "@agent-console/core/env";
+import { createAuthAdapter } from "@agent-console/core/auth";
+import { decideAccess } from "@agent-console/core/auth/authorize";
 
 // Runs before the database is reachable, so it verifies a signed token and
 // nothing else. Setup state and feature gating are checked further in.

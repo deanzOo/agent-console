@@ -1,5 +1,5 @@
 import webpush from "web-push";
-import type { AuthMode } from "@/config/env";
+import type { AuthMode } from "./env";
 import { hashPassword } from "./auth";
 import type { Db } from "./db";
 import { getSetting, isSetupComplete, markSetupComplete, setSetting } from "./settings";

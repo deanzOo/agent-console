@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
-import { getDatabase } from "@/lib/db";
-import { getMission, listEvents, openPrompts } from "@/lib/missions";
+import { getDatabase } from "@agent-console/core/db";
+import { getMission, listEvents, openPrompts } from "@agent-console/core/missions";
 import { MissionLive } from "./mission-live";
 
 export const dynamic = "force-dynamic";

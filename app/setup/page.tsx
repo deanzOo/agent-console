@@ -1,9 +1,9 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { getConfig } from "@/config/env";
-import { getDatabase } from "@/lib/db";
+import { getConfig } from "@agent-console/core/env";
+import { getDatabase } from "@agent-console/core/db";
 import { setupAccessAllowed } from "@/lib/setup-access";
-import { setupState } from "@/lib/setup";
+import { setupState } from "@agent-console/core/setup";
 import { SetupWizard } from "./setup-wizard";
 
 export const dynamic = "force-dynamic";

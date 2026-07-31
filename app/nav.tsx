@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { getConfig } from "@/config/env";
-import { getFeatures } from "@/config/features";
-import { getDatabase } from "@/lib/db";
-import { resolveCredentials } from "@/lib/settings";
+import { getConfig } from "@agent-console/core/env";
+import { getFeatures } from "@agent-console/core/features";
+import { getDatabase } from "@agent-console/core/db";
+import { resolveCredentials } from "@agent-console/core/settings";
 import { SyncButton } from "./sync-button";
 
 export function Nav() {

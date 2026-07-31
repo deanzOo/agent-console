@@ -3,7 +3,7 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { getConfig } from "@/config/env";
+import { getConfig } from "./env";
 import * as schema from "./schema";
 
 // Resolved at runtime: a `new URL(..., import.meta.url)` here is treated as a

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { OpenPrompt, StoredEvent } from "@/lib/missions";
-import { PROMPT_KIND } from "@/lib/schema";
+import type { OpenPrompt, StoredEvent } from "@agent-console/core/missions";
+import { PROMPT_KIND } from "@agent-console/core/schema";
 
 interface MissionView {
   readonly id: string;

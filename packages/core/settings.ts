@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { FeatureCredentials } from "@/config/features";
+import type { FeatureCredentials } from "./features";
 import type { Db } from "./db";
 import { settings } from "./schema";
 
