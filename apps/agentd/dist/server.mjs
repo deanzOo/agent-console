@@ -20967,6 +20967,7 @@ function matchRoute(request) {
 
 // server.ts
 var openStreams = /* @__PURE__ */ new Set();
+var MALFORMED = Symbol("malformed-json");
 var HEARTBEAT_MS = 25e3;
 var MAX_BODY_BYTES = 1e6;
 function json2(response, status, body) {
@@ -20977,6 +20978,14 @@ function json2(response, status, body) {
   });
   response.end(payload);
 }
+function safeWrite(response, chunk) {
+  if (response.destroyed || response.writableEnded) return;
+  try {
+    response.write(chunk);
+  } catch {
+    response.destroy();
+  }
+}
 async function readJson(request) {
   const chunks = [];
   let size = 0;
@@ -20986,7 +20995,11 @@ async function readJson(request) {
     chunks.push(chunk);
   }
   if (chunks.length === 0) return void 0;
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    return MALFORMED;
+  }
 }
 function streamEvents(request, response, missionId, since) {
   const db = getDatabase();
@@ -21006,19 +21019,22 @@ function streamEvents(request, response, missionId, since) {
     }
     if (event.seq <= cursor) return;
     cursor = event.seq;
-    response.write(formatSseEvent(event));
+    safeWrite(response, formatSseEvent(event));
   });
   for (const event of listEvents(db, missionId, since)) {
-    response.write(formatSseEvent(event));
+    safeWrite(response, formatSseEvent(event));
     cursor = event.seq;
   }
   replaying = false;
   for (const event of buffered) {
     if (event.seq <= cursor) continue;
     cursor = event.seq;
-    response.write(formatSseEvent(event));
+    safeWrite(response, formatSseEvent(event));
   }
-  const heartbeat = setInterval(() => response.write(": keep-alive\n\n"), HEARTBEAT_MS);
+  const heartbeat = setInterval(
+    () => safeWrite(response, ": keep-alive\n\n"),
+    HEARTBEAT_MS
+  );
   const close = () => {
     clearInterval(heartbeat);
     unsubscribe?.();
@@ -21027,6 +21043,8 @@ function streamEvents(request, response, missionId, since) {
   };
   openStreams.add(close);
   request.on("close", close);
+  request.on("error", close);
+  response.on("error", close);
   if (!session) close();
 }
 async function handle(request, response) {
@@ -21037,7 +21055,12 @@ async function handle(request, response) {
     return;
   }
   if (route.kind === "launch") {
-    const parsed2 = launchMissionSchema.safeParse(await readJson(request));
+    const body2 = await readJson(request);
+    const parsed2 = body2 === MALFORMED ? void 0 : launchMissionSchema.safeParse(body2);
+    if (!parsed2) {
+      json2(response, 400, { error: "invalid_json" });
+      return;
+    }
     if (!parsed2.success) {
       json2(response, 400, { error: "invalid_request", issues: parsed2.error.issues });
       return;
@@ -21077,7 +21100,12 @@ async function handle(request, response) {
     json2(response, 200, { ok: true });
     return;
   }
-  const parsed = answerPromptSchema.safeParse(await readJson(request));
+  const body = await readJson(request);
+  const parsed = body === MALFORMED ? void 0 : answerPromptSchema.safeParse(body);
+  if (!parsed) {
+    json2(response, 400, { error: "invalid_json" });
+    return;
+  }
   if (!parsed.success) {
     json2(response, 400, { error: "invalid_request", issues: parsed.error.issues });
     return;

@@ -18,6 +18,10 @@ import { matchRoute } from "./routes";
 // supervisor loses patience and sends SIGKILL.
 const openStreams = new Set<() => void>();
 
+// A sentinel rather than a throw: the parse failure is expected input, and
+// unwinding for it would be indistinguishable from a real fault.
+const MALFORMED = Symbol("malformed-json");
+
 const HEARTBEAT_MS = 25_000;
 const MAX_BODY_BYTES = 1_000_000;
 
@@ -30,6 +34,19 @@ function json(response: ServerResponse, status: number, body: unknown): void {
   response.end(payload);
 }
 
+// A write to a stream the client already dropped throws EPIPE, and these
+// writes happen in a timer and a subscription callback — outside any request
+// handler, so the exception is uncaught and takes the process down. This host
+// holds every live mission, so one disconnected phone must not end them all.
+function safeWrite(response: ServerResponse, chunk: string): void {
+  if (response.destroyed || response.writableEnded) return;
+  try {
+    response.write(chunk);
+  } catch {
+    response.destroy();
+  }
+}
+
 async function readJson(request: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   let size = 0;
@@ -40,7 +57,13 @@ async function readJson(request: IncomingMessage): Promise<unknown> {
     chunks.push(chunk);
   }
   if (chunks.length === 0) return undefined;
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    // Malformed input is the caller's mistake, so it reads as one rather than
+    // bubbling to the error boundary and being reported as a server fault.
+    return MALFORMED;
+  }
 }
 
 function streamEvents(
@@ -71,12 +94,12 @@ function streamEvents(
     }
     if (event.seq <= cursor) return;
     cursor = event.seq;
-    response.write(formatSseEvent(event));
+    safeWrite(response, formatSseEvent(event));
   });
 
   // Replay the gap, so a reader that dropped resumes exactly where it was.
   for (const event of listEvents(db, missionId, since)) {
-    response.write(formatSseEvent(event));
+    safeWrite(response, formatSseEvent(event));
     cursor = event.seq;
   }
 
@@ -84,10 +107,13 @@ function streamEvents(
   for (const event of buffered) {
     if (event.seq <= cursor) continue;
     cursor = event.seq;
-    response.write(formatSseEvent(event));
+    safeWrite(response, formatSseEvent(event));
   }
 
-  const heartbeat = setInterval(() => response.write(": keep-alive\n\n"), HEARTBEAT_MS);
+  const heartbeat = setInterval(
+    () => safeWrite(response, ": keep-alive\n\n"),
+    HEARTBEAT_MS,
+  );
 
   const close = () => {
     clearInterval(heartbeat);
@@ -98,6 +124,10 @@ function streamEvents(
 
   openStreams.add(close);
   request.on("close", close);
+  // A dropped connection surfaces as an error on either half; without a
+  // listener Node treats it as unhandled and ends the process.
+  request.on("error", close);
+  response.on("error", close);
   // A finished mission has no session to subscribe to; the replay was the answer.
   if (!session) close();
 }
@@ -115,7 +145,12 @@ async function handle(
   }
 
   if (route.kind === "launch") {
-    const parsed = launchMissionSchema.safeParse(await readJson(request));
+    const body = await readJson(request);
+    const parsed = body === MALFORMED ? undefined : launchMissionSchema.safeParse(body);
+    if (!parsed) {
+      json(response, 400, { error: "invalid_json" });
+      return;
+    }
     if (!parsed.success) {
       json(response, 400, { error: "invalid_request", issues: parsed.error.issues });
       return;
@@ -164,7 +199,12 @@ async function handle(
     return;
   }
 
-  const parsed = answerPromptSchema.safeParse(await readJson(request));
+  const body = await readJson(request);
+  const parsed = body === MALFORMED ? undefined : answerPromptSchema.safeParse(body);
+  if (!parsed) {
+    json(response, 400, { error: "invalid_json" });
+    return;
+  }
   if (!parsed.success) {
     json(response, 400, { error: "invalid_request", issues: parsed.error.issues });
     return;
