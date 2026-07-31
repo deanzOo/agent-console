@@ -1,5 +1,5 @@
 import { mkdirSync } from "node:fs";
-import { getConfig } from "@/config/env";
+import { getConfig } from "../env";
 import { getDatabase } from "../db";
 import { getMission, setStatus, type MissionSource } from "../missions";
 import { branchNameFor } from "../repos";

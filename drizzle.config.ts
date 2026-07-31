@@ -4,7 +4,7 @@ import { defineConfig } from "drizzle-kit";
 // its database location from config/env.ts.
 export default defineConfig({
   dialect: "sqlite",
-  schema: "./lib/schema.ts",
+  schema: "./packages/core/schema.ts",
   out: "./drizzle",
   strict: true,
   verbose: true,

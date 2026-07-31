@@ -14,7 +14,7 @@ const queryMock = vi.fn((_call: QueryCall) => ({
 const getConfigMock = vi.fn();
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: queryMock }));
-vi.mock("@/config/env", () => ({ getConfig: getConfigMock }));
+vi.mock("../env", () => ({ getConfig: getConfigMock }));
 
 const { createSdkDriver } = await import("./driver");
 

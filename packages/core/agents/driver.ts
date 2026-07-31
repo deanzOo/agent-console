@@ -1,5 +1,5 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
-import { getConfig } from "@/config/env";
+import { getConfig } from "../env";
 import { createPermissionHook } from "./permission-hook";
 import type { AgentDriver, AgentRun } from "./session";
 

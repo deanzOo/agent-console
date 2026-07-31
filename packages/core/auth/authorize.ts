@@ -1,4 +1,4 @@
-import type { AuthMode } from "@/config/env";
+import type { AuthMode } from "../env";
 
 export type AccessDecision =
   | { readonly type: "allow" }

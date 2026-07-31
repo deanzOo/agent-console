@@ -1,8 +1,8 @@
-import { getConfig } from "@/config/env";
-import { createAuthAdapter } from "@/lib/auth";
-import { getDatabase } from "@/lib/db";
-import { getSetting } from "@/lib/settings";
-import { canAccessSetup } from "@/lib/setup";
+import { getConfig } from "@agent-console/core/env";
+import { createAuthAdapter } from "@agent-console/core/auth";
+import { getDatabase } from "@agent-console/core/db";
+import { getSetting } from "@agent-console/core/settings";
+import { canAccessSetup } from "@agent-console/core/setup";
 
 // The setup routes are public in the middleware, because a fresh install has no
 // way to authenticate yet. They answer the rest of the question here, where the

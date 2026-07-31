@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getConfig } from "@/config/env";
-import { getFeatures } from "@/config/features";
-import { getDatabase } from "@/lib/db";
-import { repos } from "@/lib/schema";
-import { resolveCredentials } from "@/lib/settings";
-import { syncAsana, syncIssues, syncRepos } from "@/lib/sync";
+import { getConfig } from "@agent-console/core/env";
+import { getFeatures } from "@agent-console/core/features";
+import { getDatabase } from "@agent-console/core/db";
+import { repos } from "@agent-console/core/schema";
+import { resolveCredentials } from "@agent-console/core/settings";
+import { syncAsana, syncIssues, syncRepos } from "@agent-console/core/sync";
 
 export const dynamic = "force-dynamic";
 

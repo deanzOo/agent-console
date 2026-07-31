@@ -11,17 +11,17 @@ export default defineConfig({
       reporter: ["text-summary", "lcov"],
       // Only logic-bearing code is measured. Pages and layouts are markup and
       // are covered by manual/integration checks instead.
-      include: ["lib/**/*.ts", "config/**/*.ts"],
+      include: ["packages/core/**/*.ts"],
       exclude: [
         "**/*.test.ts",
         "**/types.ts",
         // I/O shells with no branching of their own. Their logic lives in
         // tested modules: repos.ts for paths, session.ts for the agent loop.
-        "lib/git.ts",
-        "lib/agents/manager.ts",
-        "lib/push.ts",
-        "lib/sync.ts",
-        "lib/mcp/client.ts",
+        "packages/core/git.ts",
+        "packages/core/agents/manager.ts",
+        "packages/core/push.ts",
+        "packages/core/sync.ts",
+        "packages/core/mcp/client.ts",
       ],
       // A backstop for the TDD rule, not a substitute for it — see CLAUDE.md.
       thresholds: {
@@ -35,6 +35,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL(".", import.meta.url)),
+      "@agent-console/core": fileURLToPath(new URL("./packages/core", import.meta.url)),
     },
   },
 });

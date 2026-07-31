@@ -9,6 +9,10 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 make g++ \
  && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
+# npm resolves a workspace install against every member's manifest, so they have
+# to be present before `npm ci` — with only the root one it fails outright.
+# Manifests only, so editing source does not invalidate the install layer.
+COPY packages/core/package.json ./packages/core/
 RUN npm ci
 
 FROM node:22-bookworm-slim AS build

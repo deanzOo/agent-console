@@ -1,7 +1,7 @@
-import { getDatabase } from "@/lib/db";
-import { getMission, listEvents } from "@/lib/missions";
-import { getSession } from "@/lib/agents/manager";
-import { formatSseEvent, parseSince } from "@/lib/sse";
+import { getDatabase } from "@agent-console/core/db";
+import { getMission, listEvents } from "@agent-console/core/missions";
+import { getSession } from "@agent-console/core/agents/manager";
+import { formatSseEvent, parseSince } from "@agent-console/core/sse";
 
 export const dynamic = "force-dynamic";
 

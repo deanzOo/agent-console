@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getConfig } from "@/config/env";
-import { getDatabase } from "@/lib/db";
+import { getConfig } from "@agent-console/core/env";
+import { getDatabase } from "@agent-console/core/db";
 import { setupAccessAllowed } from "@/lib/setup-access";
-import { applySetupStep, setupState } from "@/lib/setup";
+import { applySetupStep, setupState } from "@agent-console/core/setup";
 
 export const dynamic = "force-dynamic";
 

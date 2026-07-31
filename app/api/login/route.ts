@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getConfig } from "@/config/env";
-import { SESSION_COOKIE, issueSession, verifyPassword } from "@/lib/auth";
-import { getDatabase } from "@/lib/db";
-import { getSetting } from "@/lib/settings";
+import { getConfig } from "@agent-console/core/env";
+import { SESSION_COOKIE, issueSession, verifyPassword } from "@agent-console/core/auth";
+import { getDatabase } from "@agent-console/core/db";
+import { getSetting } from "@agent-console/core/settings";
 
 export const dynamic = "force-dynamic";
 

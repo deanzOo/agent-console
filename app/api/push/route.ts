@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getDatabase } from "@/lib/db";
-import { pushSubscriptions } from "@/lib/schema";
-import { getSetting } from "@/lib/settings";
+import { getDatabase } from "@agent-console/core/db";
+import { pushSubscriptions } from "@agent-console/core/schema";
+import { getSetting } from "@agent-console/core/settings";
 
 export const dynamic = "force-dynamic";
 

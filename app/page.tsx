@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getDatabase } from "@/lib/db";
-import { countAwaitingInput, listMissions } from "@/lib/missions";
-import { isSetupComplete } from "@/lib/settings";
+import { getDatabase } from "@agent-console/core/db";
+import { countAwaitingInput, listMissions } from "@agent-console/core/missions";
+import { isSetupComplete } from "@agent-console/core/settings";
 import { NewMissionForm } from "./new-mission-form";
 
 export const dynamic = "force-dynamic";
