@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { getConfig } from "../env";
 import { getDatabase } from "../db";
-import { getMission, setStatus, type MissionSource } from "../missions";
+import { appendEvent, getMission, setStatus, type MissionSource } from "../missions";
 import { branchNameFor } from "../repos";
 import { createWorktree, defaultBranch, ensureBareClone } from "../git";
 import { createSdkDriver } from "./driver";
@@ -64,6 +64,13 @@ export async function launchMission(input: LaunchInput): Promise<string> {
     // and handed out by getSession() for a mission that never ran.
     sessions.delete(mission.id);
     setStatus(db, mission.id, "failed");
+    // Without this the transcript is silent about why: the mission shows as
+    // failed and the only account of the reason went back in an HTTP response
+    // nobody kept.
+    appendEvent(db, mission.id, "mission.status", {
+      status: "failed",
+      error: error instanceof Error ? error.message : String(error),
+    });
     throw error;
   }
 
@@ -86,7 +93,10 @@ async function prepareWorkspace(
     fullName: input.repo,
     missionId,
     branch: branchNameFor(input.title, missionId),
-    base: `origin/${base}`,
+    // A bare clone holds branches in refs/heads and creates no remote-tracking
+    // refs, so the base is the branch name itself. "origin/main" names nothing
+    // there, and every repo-backed mission died on it.
+    base,
   });
 }
 
