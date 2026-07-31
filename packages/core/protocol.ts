@@ -15,7 +15,14 @@ export const launchMissionSchema = z.object({
   prompt: z.string().trim().min(1),
   source: z.enum(MISSION_SOURCES),
   sourceRef: z.string().trim().min(1).optional(),
-  repo: z.string().regex(REPO_FULL_NAME, "expected owner/repo").optional(),
+  repo: z
+    .string()
+    .regex(REPO_FULL_NAME, "expected owner/repo")
+    // The character class allows dots, so the pattern alone admits "../repo".
+    // barePath refuses those too; refusing them here keeps the boundary and the
+    // path derivation agreeing about what a repository name is.
+    .refine((name) => !name.includes(".."), "must not contain '..'")
+    .optional(),
   base: z.string().trim().min(1).optional(),
 });
 

@@ -23,6 +23,17 @@ const ACTIONS: Record<string, { action: AgentdAction; method: string }> = {
   events: { action: "events", method: "GET" },
 };
 
+// The caller percent-encodes the id, so it has to be decoded here or an id
+// containing a reserved character never matches the row it names. A malformed
+// escape is not a mission id, so it resolves to nothing rather than throwing.
+function decodeSegment(segment: string): string | undefined {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return undefined;
+  }
+}
+
 // Routing is separated from the server so it can be tested without a socket,
 // the same reason repos.ts is split from git.ts.
 export function matchRoute(request: AgentdRequest): AgentdRoute {
@@ -37,8 +48,9 @@ export function matchRoute(request: AgentdRequest): AgentdRoute {
   if (request.method === "POST" && segments.length === 1) return { kind: "launch" };
 
   if (segments.length === 3) {
-    const [, id, action] = segments;
+    const [, encodedId, action] = segments;
     const known = action === undefined ? undefined : ACTIONS[action];
+    const id = encodedId === undefined ? undefined : decodeSegment(encodedId);
     if (id !== undefined && known !== undefined && known.method === request.method) {
       return { kind: "mission", id, action: known.action };
     }

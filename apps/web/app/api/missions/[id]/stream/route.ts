@@ -34,6 +34,14 @@ export async function GET(
     return new Response(outcome.value, { headers: SSE_HEADERS });
   }
 
+  // A refusal is a real error and is surfaced as one. Only an unreachable host
+  // falls through to a replay, because only then is the mission still fine.
+  if (!outcome.ok && outcome.reason === "rejected") {
+    return Response.json(outcome.body ?? { error: "stream_failed" }, {
+      status: outcome.status,
+    });
+  }
+
   // The session host is restarting. The transcript so far still exists, so
   // replay it and say so, rather than showing an empty or broken stream.
   const encoder = new TextEncoder();
@@ -42,9 +50,7 @@ export async function GET(
       for (const event of listEvents(db, id, since)) {
         controller.enqueue(encoder.encode(formatSseEvent(event)));
       }
-      if (!outcome.ok && outcome.reason === "unreachable") {
-        controller.enqueue(encoder.encode("event: agentd.unreachable\ndata: {}\n\n"));
-      }
+      controller.enqueue(encoder.encode("event: agentd.unreachable\ndata: {}\n\n"));
       controller.close();
     },
   });

@@ -8,9 +8,15 @@ import {
   runningCount,
   stopMission,
 } from "@agent-console/core/agents/manager";
+import type { StoredEvent } from "@agent-console/core/missions";
 import { formatSseEvent, parseSince } from "@agent-console/core/sse";
 import { answerPromptSchema, launchMissionSchema } from "@agent-console/core/protocol";
 import { matchRoute } from "./routes";
+
+// A transcript stream never ends on its own, so server.close() would wait for
+// one forever. Shutdown ends them itself rather than hanging until the
+// supervisor loses patience and sends SIGKILL.
+const openStreams = new Set<() => void>();
 
 const HEARTBEAT_MS = 25_000;
 const MAX_BODY_BYTES = 1_000_000;
@@ -50,28 +56,47 @@ function streamEvents(
     connection: "keep-alive",
   });
 
-  // Replay the gap first, so a reader that dropped resumes exactly where it was.
   let cursor = since;
+  let replaying = true;
+  const buffered: StoredEvent[] = [];
+
+  // Subscribing before the replay, not after: an event emitted between reading
+  // the table and attaching the listener would otherwise be delivered to
+  // nobody, and the reader would sit waiting for a message already gone.
+  const session = getSession(missionId);
+  const unsubscribe = session?.subscribe((event) => {
+    if (replaying) {
+      buffered.push(event);
+      return;
+    }
+    if (event.seq <= cursor) return;
+    cursor = event.seq;
+    response.write(formatSseEvent(event));
+  });
+
+  // Replay the gap, so a reader that dropped resumes exactly where it was.
   for (const event of listEvents(db, missionId, since)) {
     response.write(formatSseEvent(event));
     cursor = event.seq;
   }
 
-  const session = getSession(missionId);
-  const unsubscribe = session?.subscribe((event) => {
-    if (event.seq <= cursor) return;
+  replaying = false;
+  for (const event of buffered) {
+    if (event.seq <= cursor) continue;
     cursor = event.seq;
     response.write(formatSseEvent(event));
-  });
+  }
 
   const heartbeat = setInterval(() => response.write(": keep-alive\n\n"), HEARTBEAT_MS);
 
   const close = () => {
     clearInterval(heartbeat);
     unsubscribe?.();
+    openStreams.delete(close);
     response.end();
   };
 
+  openStreams.add(close);
   request.on("close", close);
   // A finished mission has no session to subscribe to; the replay was the answer.
   if (!session) close();
@@ -178,6 +203,8 @@ server.listen(config.agentdPort, "127.0.0.1", () => {
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.on(signal, () => {
+    for (const endStream of [...openStreams]) endStream();
     server.close(() => process.exit(0));
+    server.closeAllConnections();
   });
 }

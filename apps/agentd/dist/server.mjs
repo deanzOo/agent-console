@@ -20920,7 +20920,7 @@ var launchMissionSchema = external_exports.object({
   prompt: external_exports.string().trim().min(1),
   source: external_exports.enum(MISSION_SOURCES),
   sourceRef: external_exports.string().trim().min(1).optional(),
-  repo: external_exports.string().regex(REPO_FULL_NAME, "expected owner/repo").optional(),
+  repo: external_exports.string().regex(REPO_FULL_NAME, "expected owner/repo").refine((name) => !name.includes(".."), "must not contain '..'").optional(),
   base: external_exports.string().trim().min(1).optional()
 });
 var DEFAULT_DENIAL_MESSAGE = "Denied by the operator.";
@@ -20940,6 +20940,13 @@ var ACTIONS = {
   stop: { action: "stop", method: "POST" },
   events: { action: "events", method: "GET" }
 };
+function decodeSegment(segment) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return void 0;
+  }
+}
 function matchRoute(request) {
   const segments = request.pathname.split("/").filter((part) => part !== "");
   if (request.method === "GET" && segments.length === 1 && segments[0] === "health") {
@@ -20948,8 +20955,9 @@ function matchRoute(request) {
   if (segments[0] !== "missions") return { kind: "unknown" };
   if (request.method === "POST" && segments.length === 1) return { kind: "launch" };
   if (segments.length === 3) {
-    const [, id, action] = segments;
+    const [, encodedId, action] = segments;
     const known = action === void 0 ? void 0 : ACTIONS[action];
+    const id = encodedId === void 0 ? void 0 : decodeSegment(encodedId);
     if (id !== void 0 && known !== void 0 && known.method === request.method) {
       return { kind: "mission", id, action: known.action };
     }
@@ -20958,6 +20966,7 @@ function matchRoute(request) {
 }
 
 // server.ts
+var openStreams = /* @__PURE__ */ new Set();
 var HEARTBEAT_MS = 25e3;
 var MAX_BODY_BYTES = 1e6;
 function json2(response, status, body) {
@@ -20987,22 +20996,36 @@ function streamEvents(request, response, missionId, since) {
     connection: "keep-alive"
   });
   let cursor = since;
-  for (const event of listEvents(db, missionId, since)) {
-    response.write(formatSseEvent(event));
-    cursor = event.seq;
-  }
+  let replaying = true;
+  const buffered = [];
   const session = getSession(missionId);
   const unsubscribe = session?.subscribe((event) => {
+    if (replaying) {
+      buffered.push(event);
+      return;
+    }
     if (event.seq <= cursor) return;
     cursor = event.seq;
     response.write(formatSseEvent(event));
   });
+  for (const event of listEvents(db, missionId, since)) {
+    response.write(formatSseEvent(event));
+    cursor = event.seq;
+  }
+  replaying = false;
+  for (const event of buffered) {
+    if (event.seq <= cursor) continue;
+    cursor = event.seq;
+    response.write(formatSseEvent(event));
+  }
   const heartbeat = setInterval(() => response.write(": keep-alive\n\n"), HEARTBEAT_MS);
   const close = () => {
     clearInterval(heartbeat);
     unsubscribe?.();
+    openStreams.delete(close);
     response.end();
   };
+  openStreams.add(close);
   request.on("close", close);
   if (!session) close();
 }
@@ -21085,6 +21108,8 @@ server.listen(config2.agentdPort, "127.0.0.1", () => {
 });
 for (const signal of ["SIGTERM", "SIGINT"]) {
   process.on(signal, () => {
+    for (const endStream of [...openStreams]) endStream();
     server.close(() => process.exit(0));
+    server.closeAllConnections();
   });
 }

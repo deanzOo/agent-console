@@ -44,6 +44,18 @@ describe("matchRoute", () => {
     expect(post("/missions/abc/events").kind).toBe("unknown");
   });
 
+  it("decodes the mission id, which the caller percent-encodes", () => {
+    expect(post("/missions/a%2Fb/answer")).toEqual({
+      kind: "mission",
+      id: "a/b",
+      action: "answer",
+    });
+  });
+
+  it("treats a malformed escape as no route rather than throwing", () => {
+    expect(post("/missions/%E0%A4%A/answer").kind).toBe("unknown");
+  });
+
   it("rejects anything outside the two known prefixes", () => {
     expect(get("/").kind).toBe("unknown");
     expect(get("/missions/abc").kind).toBe("unknown");
