@@ -13,6 +13,7 @@ COPY package.json package-lock.json ./
 # to be present before `npm ci` — with only the root one it fails outright.
 # Manifests only, so editing source does not invalidate the install layer.
 COPY packages/core/package.json ./packages/core/
+COPY apps/web/package.json ./apps/web/
 RUN npm ci
 
 FROM node:22-bookworm-slim AS build
@@ -33,7 +34,10 @@ ENV NODE_ENV=production \
     WORKSPACE_ROOT=/workspace \
     # The SDK would otherwise prefer the binary it ships, which is linked
     # against a libc this image does not have and fails at mission start.
-    CLAUDE_CLI_PATH=/usr/local/bin/claude
+    CLAUDE_CLI_PATH=/usr/local/bin/claude \
+    # next start runs from the web package, so a cwd-relative default would
+    # look for migrations inside apps/web and find nothing.
+    MIGRATIONS_DIR=/app/drizzle
 
 ARG GH_VERSION=2.96.0
 ARG TARGETARCH
@@ -59,13 +63,14 @@ RUN apt-get update \
 # copy every file up into a new overlay layer — on node_modules that is tens of
 # thousands of files, which doubles the image and stalls the build on I/O.
 COPY --from=deps --chown=agent:agent /app/node_modules ./node_modules
-COPY --from=build --chown=agent:agent /app/.next ./.next
+COPY --from=build --chown=agent:agent /app/apps/web/.next ./apps/web/.next
 # Each directory needs its own COPY: with several sources, COPY flattens
 # directory *contents* into the destination, so `drizzle` would land as loose
 # files in /app and the migrations would not be found.
-COPY --chown=agent:agent package.json next.config.ts ./
+COPY --chown=agent:agent package.json ./
+COPY --chown=agent:agent apps/web/package.json apps/web/next.config.ts ./apps/web/
 COPY --chown=agent:agent drizzle ./drizzle
-COPY --chown=agent:agent public ./public
+COPY --chown=agent:agent apps/web/public ./apps/web/public
 
 # Never root: the agent can do anything this user can.
 USER agent

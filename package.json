@@ -12,11 +12,11 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "npm run dev   -w @agent-console/web",
+    "build": "npm run build -w @agent-console/web",
+    "start": "npm run start -w @agent-console/web",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p packages/core && tsc --noEmit -p apps/web",
     "dupes": "jscpd",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -49,9 +49,6 @@
     "drizzle-orm": "^0.45.2",
     "drizzle-zod": "^0.8.3",
     "jose": "^6.2.5",
-    "next": "^16.2.12",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
     "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },

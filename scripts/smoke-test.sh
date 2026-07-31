@@ -15,6 +15,7 @@ set -m
 
 cd "$(dirname "$0")/.."
 
+APP_DIR="apps/web"
 PORT="${SMOKE_PORT:-3999}"
 STARTUP_TIMEOUT_SECONDS=45
 BASE="http://127.0.0.1:$PORT"
@@ -31,8 +32,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if [ ! -d .next ]; then
-  echo "smoke: no .next — run 'npm run build' first" >&2
+# Build output lives in the web package, not the repository root.
+if [ ! -d "$APP_DIR/.next" ]; then
+  echo "smoke: no $APP_DIR/.next — run 'npm run build' first" >&2
   exit 1
 fi
 
@@ -48,7 +50,7 @@ start_app() {
   WORKSPACE_ROOT="$DATA/work" \
   HOST=127.0.0.1 \
   PORT="$PORT" \
-    ./node_modules/.bin/next start -p "$PORT" > "$LOG" 2>&1 &
+    ./node_modules/.bin/next start "$APP_DIR" -p "$PORT" > "$LOG" 2>&1 &
   APP=$!
 
   local ready=0

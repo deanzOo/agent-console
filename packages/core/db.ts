@@ -6,13 +6,13 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { getConfig } from "./env";
 import * as schema from "./schema";
 
-// Resolved at runtime: a `new URL(..., import.meta.url)` here is treated as a
-// static import by the bundler and fails the build.
-const MIGRATIONS_FOLDER = path.join(process.cwd(), "drizzle");
-
 export type Db = ReturnType<typeof drizzle<typeof schema>>;
 
-export function openDatabase(file: string): Db {
+// The folder is passed in rather than derived here: the app is started from
+// the web package's directory, so anything cwd-relative resolves somewhere the
+// migrations are not, and the failure reads "Can't find meta/_journal.json"
+// without naming a path.
+export function openDatabase(file: string, migrationsFolder?: string): Db {
   mkdirSync(path.dirname(file), { recursive: true });
 
   const connection = new Database(file);
@@ -22,7 +22,9 @@ export function openDatabase(file: string): Db {
   connection.pragma("foreign_keys = ON");
 
   const db = drizzle(connection, { schema });
-  migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
+  migrate(db, {
+    migrationsFolder: migrationsFolder ?? path.join(process.cwd(), "drizzle"),
+  });
 
   // Holds tokens and push keys; the umask decides the mode at creation.
   chmodSync(file, 0o600);
@@ -33,6 +35,7 @@ export function openDatabase(file: string): Db {
 let cached: Db | undefined;
 
 export function getDatabase(): Db {
-  cached ??= openDatabase(path.join(getConfig().dataDir, "data.db"));
+  const config = getConfig();
+  cached ??= openDatabase(path.join(config.dataDir, "data.db"), config.migrationsDir);
   return cached;
 }
