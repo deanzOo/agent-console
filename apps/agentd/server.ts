@@ -9,6 +9,7 @@ import {
   stopMission,
 } from "@agent-console/core/agents/manager";
 import type { StoredEvent } from "@agent-console/core/missions";
+import { reconcileOrphans } from "@agent-console/core/agents/orphans";
 import { formatSseEvent, parseSince } from "@agent-console/core/sse";
 import { answerPromptSchema, launchMissionSchema } from "@agent-console/core/protocol";
 import { matchRoute } from "./routes";
@@ -223,6 +224,16 @@ async function handle(
 }
 
 const config = getConfig();
+
+// The registry is empty at startup by definition, so anything the database
+// still calls live is a mission whose session died with the last process.
+// Leaving them alone strands the operator: the console offers approvals that
+// answer with session_not_running, and the mission can be neither advanced nor
+// dismissed.
+const orphans = reconcileOrphans(getDatabase());
+if (orphans > 0) {
+  process.stdout.write(`agentd: stopped ${orphans} mission(s) left by a restart\n`);
+}
 
 const server = createServer((request, response) => {
   handle(request, response).catch((error: unknown) => {
