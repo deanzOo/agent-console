@@ -16,6 +16,7 @@ set -m
 cd "$(dirname "$0")/.."
 
 APP_DIR="apps/web"
+AGENTD_PORT="${SMOKE_AGENTD_PORT:-3998}"
 PORT="${SMOKE_PORT:-3999}"
 STARTUP_TIMEOUT_SECONDS=45
 BASE="http://127.0.0.1:$PORT"
@@ -24,10 +25,12 @@ TEST_PASSWORD="smoke-test-password"
 
 DATA=""
 APP=""
+AGENTD=""
 failed=0
 
 cleanup() {
   [ -n "$APP" ] && kill -- "-$APP" 2>/dev/null
+  [ -n "$AGENTD" ] && kill -- "-$AGENTD" 2>/dev/null
   [ -n "$DATA" ] && rm -rf "$DATA"
 }
 trap cleanup EXIT
@@ -44,12 +47,23 @@ start_app() {
   DATA="$(mktemp -d)"
   LOG="$DATA/app.log"
 
+  # The deployment runs both processes; a console with no session host would
+  # pass every check here and be unable to run a single mission.
+  AUTH_MODE="$mode" \
+  SESSION_SECRET="$(openssl rand -hex 32)" \
+  DATA_DIR="$DATA" \
+  WORKSPACE_ROOT="$DATA/work" \
+  AGENTD_PORT="$AGENTD_PORT" \
+    node apps/agentd/dist/server.mjs > "$DATA/agentd.log" 2>&1 &
+  AGENTD=$!
+
   AUTH_MODE="$mode" \
   SESSION_SECRET="$(openssl rand -hex 32)" \
   DATA_DIR="$DATA" \
   WORKSPACE_ROOT="$DATA/work" \
   HOST=127.0.0.1 \
   PORT="$PORT" \
+  AGENTD_PORT="$AGENTD_PORT" \
     ./node_modules/.bin/next start "$APP_DIR" -p "$PORT" > "$LOG" 2>&1 &
   APP=$!
 
@@ -85,6 +99,8 @@ stop_app() {
   kill -- "-$APP" 2>/dev/null
   wait "$APP" 2>/dev/null
   APP=""
+  [ -n "$AGENTD" ] && kill -- "-$AGENTD" 2>/dev/null
+  AGENTD=""
   rm -rf "$DATA"
   DATA=""
 }

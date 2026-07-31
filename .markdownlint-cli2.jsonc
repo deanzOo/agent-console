@@ -9,5 +9,13 @@
   },
   "globs": ["**/*.md"],
   // Build output now lives per package, so these are matched at any depth.
-  "ignores": ["**/node_modules", "**/.next", "**/coverage", "CHANGELOG.md", "drizzle"],
+  "ignores": [
+    "**/node_modules",
+    "**/.next",
+    "**/coverage",
+    "**/dist",
+    "graphify-out",
+    "CHANGELOG.md",
+    "drizzle",
+  ],
 }

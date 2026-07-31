@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDatabase } from "@agent-console/core/db";
 import { getMission } from "@agent-console/core/missions";
-import { getSession } from "@agent-console/core/agents/manager";
+import { interruptMission } from "@/lib/agentd";
 
 export const dynamic = "force-dynamic";
 
@@ -15,11 +15,12 @@ export async function POST(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const session = getSession(id);
-  if (!session) {
-    return NextResponse.json({ error: "session_not_running" }, { status: 409 });
-  }
+  const outcome = await interruptMission(id);
+  if (outcome.ok) return NextResponse.json({ ok: true });
 
-  await session.interrupt();
-  return NextResponse.json({ ok: true });
+  return outcome.reason === "unreachable"
+    ? NextResponse.json({ error: "agentd_unreachable" }, { status: 503 })
+    : NextResponse.json(outcome.body ?? { error: "failed" }, {
+        status: outcome.status,
+      });
 }

@@ -308,20 +308,31 @@ checks, and the full gate all run again in CI.
 ## Codebase map
 
 ```text
-app/            routes — pages and route handlers (thin; logic lives in lib/)
-config/         env.ts (zod-validated env), features.ts (getFeatures)
-lib/agents/     session manager — the core. query(), canUseTool parking, SSE fan-out
-lib/auth/       adapter per AUTH_MODE: cloudflare-access | password | trusted-network
-lib/mcp/        stdio MCP clients (asana, github), lazily spawned, restart with backoff
-lib/repos.ts    bare clone + worktree-per-mission lifecycle
-lib/notify.ts   web-push + telegram, both best-effort
-lib/db.ts       better-sqlite3 singleton, migrations on boot
-deploy/         install.sh + systemd/cloudflared templates
-scripts/        CI helpers
+apps/web/            the console. Pages, route handlers, auth middleware, PWA assets
+  app/               routes — thin; logic lives in packages/core
+  lib/agentd.ts      the only module that knows agentd is reached over HTTP
+apps/agentd/         the session host. Owns live runs so restarting the UI cannot kill them
+  server.ts          node:http + SSE on loopback; routes.ts is the testable half
+packages/core/       framework-free. Imports neither next nor react, and must not start
+  agents/            sessions: query(), the parked permission promise, SSE fan-out
+  auth/              adapter per AUTH_MODE: cloudflare-access | password | trusted-network
+  mcp/               stdio MCP clients (asana, github), lazily spawned, restart with backoff
+  repos.ts git.ts    bare clone + worktree-per-mission lifecycle
+  notify.ts          web-push + telegram, both best-effort
+  db.ts              better-sqlite3 singleton
+  env.ts features.ts zod-validated env; getFeatures()
+deploy/              install.sh + systemd/cloudflared templates
+scripts/             CI helpers
+ci/checks.json       the gate, read by both the local runner and the GitHub matrix
 ```
 
-**Route handlers stay thin.** They validate input, call a `lib/` function, and shape the response. Business
-logic in a route handler can't be unit tested without HTTP, which makes it hard to TDD — that's the tell.
+**Route handlers stay thin.** They validate input, call into `packages/core` or `agentd`, and shape the
+response. Business logic in a route handler can't be unit tested without HTTP, which makes it hard to
+TDD — that's the tell.
+
+**The web app holds no session state.** Live runs belong to `agentd`, which is the entire point: deploying
+the UI must not kill a mission that is mid-flight. A route handler that caches anything about a running
+mission puts that back.
 
 ### Adding an integration
 
@@ -338,8 +349,9 @@ questions without grepping the whole tree.
 
 - **Query before exploring.** `graphify query "..."` for anything about architecture, call paths, or where a
   thing lives.
-- **Refresh after changing code:** `npm run graph:update` (incremental, cheap). Build from scratch with
-  `npm run graph`.
+- **Refresh after changing code:** `npm run graph:update` (incremental, cheap). `npm run graph` forces a
+  full re-extract. Both use `graphify update`, which is AST-only — plain `graphify .` runs semantic
+  extraction and ships file contents to an external model, which this repo does not do.
 - **Code only.** Never send docs, configs, or images to an external model — build stays local (AST /
   tree-sitter). If a `GEMINI_API_KEY` or `GOOGLE_API_KEY` is present, still skip semantic egress.
 - `graphify-out/` is gitignored. The graph is a local artifact, never committed.

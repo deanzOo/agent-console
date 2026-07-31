@@ -1,0 +1,201 @@
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { z } from "zod";
+import { getConfig } from "@agent-console/core/env";
+import { getDatabase } from "@agent-console/core/db";
+import { getMission, listEvents } from "@agent-console/core/missions";
+import {
+  getSession,
+  launchMission,
+  runningCount,
+  stopMission,
+} from "@agent-console/core/agents/manager";
+import { formatSseEvent, parseSince } from "@agent-console/core/sse";
+import { matchRoute } from "./routes";
+
+// The web app validates the operator's input; this validates what crosses the
+// process boundary, which is a separate trust boundary even on loopback.
+const launchSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  prompt: z.string().trim().min(1),
+  source: z.enum(["free", "github", "asana"]),
+  sourceRef: z.string().trim().min(1).optional(),
+  repo: z.string().trim().min(1).optional(),
+  base: z.string().trim().min(1).optional(),
+});
+
+const answerSchema = z.discriminatedUnion("decision", [
+  z.object({ promptId: z.string().min(1), decision: z.literal("allow") }),
+  z.object({
+    promptId: z.string().min(1),
+    decision: z.literal("deny"),
+    message: z.string().trim().min(1).default("Denied by the operator."),
+  }),
+]);
+
+const HEARTBEAT_MS = 25_000;
+const MAX_BODY_BYTES = 1_000_000;
+
+function json(response: ServerResponse, status: number, body: unknown): void {
+  const payload = JSON.stringify(body);
+  response.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    "content-length": Buffer.byteLength(payload),
+  });
+  response.end(payload);
+}
+
+async function readJson(request: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    size += chunk.length;
+    // An unbounded read is a memory exhaustion primitive, loopback or not.
+    if (size > MAX_BODY_BYTES) throw new Error("request body too large");
+    chunks.push(chunk);
+  }
+  if (chunks.length === 0) return undefined;
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+function streamEvents(
+  request: IncomingMessage,
+  response: ServerResponse,
+  missionId: string,
+  since: number,
+): void {
+  const db = getDatabase();
+  response.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache, no-transform",
+    connection: "keep-alive",
+  });
+
+  // Replay the gap first, so a reader that dropped resumes exactly where it was.
+  let cursor = since;
+  for (const event of listEvents(db, missionId, since)) {
+    response.write(formatSseEvent(event));
+    cursor = event.seq;
+  }
+
+  const session = getSession(missionId);
+  const unsubscribe = session?.subscribe((event) => {
+    if (event.seq <= cursor) return;
+    cursor = event.seq;
+    response.write(formatSseEvent(event));
+  });
+
+  const heartbeat = setInterval(() => response.write(": keep-alive\n\n"), HEARTBEAT_MS);
+
+  const close = () => {
+    clearInterval(heartbeat);
+    unsubscribe?.();
+    response.end();
+  };
+
+  request.on("close", close);
+  // A finished mission has no session to subscribe to; the replay was the answer.
+  if (!session) close();
+}
+
+async function handle(
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  const url = new URL(request.url ?? "/", "http://agentd.local");
+  const route = matchRoute({ method: request.method ?? "GET", pathname: url.pathname });
+
+  if (route.kind === "health") {
+    json(response, 200, { ok: true, running: runningCount() });
+    return;
+  }
+
+  if (route.kind === "launch") {
+    const parsed = launchSchema.safeParse(await readJson(request));
+    if (!parsed.success) {
+      json(response, 400, { error: "invalid_request", issues: parsed.error.issues });
+      return;
+    }
+    json(response, 201, { id: await launchMission(parsed.data) });
+    return;
+  }
+
+  if (route.kind === "unknown") {
+    json(response, 404, { error: "not_found" });
+    return;
+  }
+
+  if (!getMission(getDatabase(), route.id)) {
+    json(response, 404, { error: "not_found" });
+    return;
+  }
+
+  if (route.action === "events") {
+    streamEvents(
+      request,
+      response,
+      route.id,
+      parseSince(url.searchParams.get("since")),
+    );
+    return;
+  }
+
+  const session = getSession(route.id);
+  if (!session) {
+    json(response, 409, { error: "session_not_running" });
+    return;
+  }
+
+  if (route.action === "interrupt") {
+    await session.interrupt();
+    json(response, 200, { ok: true });
+    return;
+  }
+
+  if (route.action === "stop") {
+    await stopMission(route.id);
+    json(response, 200, { ok: true });
+    return;
+  }
+
+  const parsed = answerSchema.safeParse(await readJson(request));
+  if (!parsed.success) {
+    json(response, 400, { error: "invalid_request", issues: parsed.error.issues });
+    return;
+  }
+  const handled = session.answer(
+    parsed.data.promptId,
+    parsed.data.decision === "allow"
+      ? { behavior: "allow" }
+      : { behavior: "deny", message: parsed.data.message },
+  );
+  json(
+    response,
+    handled ? 200 : 409,
+    handled ? { ok: true } : { error: "prompt_not_pending" },
+  );
+}
+
+const config = getConfig();
+
+const server = createServer((request, response) => {
+  handle(request, response).catch((error: unknown) => {
+    if (!response.headersSent) {
+      json(response, 500, { error: error instanceof Error ? error.message : "failed" });
+      return;
+    }
+    response.end();
+  });
+});
+
+// Loopback only, and not negotiable by accident: this speaks for every agent on
+// the box and has no authentication of its own — that lives in the web app.
+// Exposing it is handing an unauthenticated agent runner to the network.
+server.listen(config.agentdPort, "127.0.0.1", () => {
+  process.stdout.write(`agentd listening on 127.0.0.1:${config.agentdPort}\n`);
+});
+
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.on(signal, () => {
+    server.close(() => process.exit(0));
+  });
+}

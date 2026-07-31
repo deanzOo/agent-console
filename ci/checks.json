@@ -42,7 +42,7 @@
   {
     "id": "smoke",
     "name": "Smoke test",
-    "command": "npm run build && bash scripts/smoke-test.sh"
+    "command": "npm run build && npm run build -w @agent-console/agentd && bash scripts/smoke-test.sh"
   },
   {
     "id": "audit",

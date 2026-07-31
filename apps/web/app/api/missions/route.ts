@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDatabase } from "@agent-console/core/db";
 import { countAwaitingInput, listMissions } from "@agent-console/core/missions";
-import { launchMission } from "@agent-console/core/agents/manager";
+import { launchMission } from "@/lib/agentd";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +35,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const id = await launchMission(parsed.data);
-  return NextResponse.json({ id }, { status: 201 });
+  const outcome = await launchMission(parsed.data);
+  if (!outcome.ok) {
+    return outcome.reason === "unreachable"
+      ? NextResponse.json({ error: "agentd_unreachable" }, { status: 503 })
+      : NextResponse.json(outcome.body ?? { error: "failed" }, {
+          status: outcome.status,
+        });
+  }
+  return NextResponse.json(outcome.value, { status: 201 });
 }
