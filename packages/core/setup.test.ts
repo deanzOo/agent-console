@@ -78,6 +78,27 @@ describe("applySetupStep", () => {
     expect(getSetting(db, "password_hash")).toMatch(/^scrypt:/);
   });
 
+  // web-push requires a mailto: or https: subject and throws otherwise. The
+  // notifier swallows its errors, so a bare address would pass setup and then
+  // silently deliver nothing, with no failure visible anywhere.
+  it.each(["deanabutbul@gmail.com", "me", "http://example.com", "mailto:", " "])(
+    "rejects %o as a push contact",
+    async (subject) => {
+      await expect(applySetupStep(db, { step: "push", subject })).rejects.toThrowError(
+        /mailto:|https:/,
+      );
+    },
+  );
+
+  it.each(["mailto:you@example.com", "https://example.com/contact"])(
+    "accepts %o and generates a keypair",
+    async (subject) => {
+      await applySetupStep(db, { step: "push", subject });
+      expect(getSetting(db, "vapid_public_key")).toBeDefined();
+      expect(getSetting(db, "vapid_subject")).toBe(subject);
+    },
+  );
+
   it("stores a github token", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ login: "me" })));
     await applySetupStep(db, { step: "github", token: "github_pat_x" });

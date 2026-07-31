@@ -45,11 +45,18 @@ export function SetupWizard({
 
     const refreshed = await fetch("/api/setup").then((r) => r.json());
     setState(refreshed);
+    // The nav is a server component, so client state cannot reach it: a step
+    // that enables a feature leaves it hidden until a full reload. Configuring
+    // push and then not finding the button is the first thing that happens to
+    // a new operator.
+    router.refresh();
     return true;
   }
 
   async function finish() {
-    if (await submit({ step: "finish" })) router.push("/");
+    if (!(await submit({ step: "finish" }))) return;
+    router.push("/");
+    router.refresh();
   }
 
   return (
