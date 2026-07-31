@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, gt, isNull, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gt, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import type { Db } from "./db";
 import { titleContains } from "./issues";
 import {
@@ -70,12 +70,17 @@ export function getMission(db: Db, id: string): Mission | undefined {
 export interface MissionFilter {
   readonly status?: MissionStatus | undefined;
   readonly query?: string | undefined;
+  /** Archived missions are excluded unless this asks for them instead. */
+  readonly archived?: boolean | undefined;
 }
 
 export function listMissions(db: Db, filter: MissionFilter = {}): Mission[] {
   const query = filter.query?.trim();
   const conditions: SQL[] = [];
 
+  conditions.push(
+    filter.archived ? isNotNull(missions.archivedAt) : isNull(missions.archivedAt),
+  );
   if (filter.status) conditions.push(eq(missions.status, filter.status));
   if (query) {
     conditions.push(titleContains(missions.title, query));
@@ -95,9 +100,28 @@ export function countAwaitingInput(db: Db): number {
   const row = db
     .select({ count: sql<number>`count(*)` })
     .from(missions)
-    .where(eq(missions.status, MISSION_STATUS.AWAITING_INPUT))
+    .where(
+      and(
+        eq(missions.status, MISSION_STATUS.AWAITING_INPUT),
+        isNull(missions.archivedAt),
+      ),
+    )
     .get();
   return row?.count ?? 0;
+}
+
+// Archiving hides a mission and records when. Nothing is deleted: the
+// transcript is the record of what an agent actually did, and the worktree is
+// left alone because tidying a list should never destroy uncommitted work.
+export function archiveMission(db: Db, id: string): void {
+  db.update(missions)
+    .set({ archivedAt: new Date().toISOString() })
+    .where(eq(missions.id, id))
+    .run();
+}
+
+export function restoreMission(db: Db, id: string): void {
+  db.update(missions).set({ archivedAt: null }).where(eq(missions.id, id)).run();
 }
 
 export function setStatus(db: Db, id: string, status: MissionStatus): void {

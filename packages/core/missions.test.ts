@@ -8,9 +8,11 @@ import {
   answerPrompt,
   appendEvent,
   countAwaitingInput,
+  archiveMission,
   createMission,
   getMission,
   listEvents,
+  restoreMission,
   listMissions,
   openPrompts,
   recordPrompt,
@@ -61,6 +63,56 @@ describe("createMission", () => {
 
   it("returns undefined for an unknown mission", () => {
     expect(getMission(db, "nope")).toBeUndefined();
+  });
+});
+
+describe("archiving", () => {
+  it("hides an archived mission from the default list", () => {
+    const m = createMission(db, { title: "Old", source: "free", prompt: "p" });
+    archiveMission(db, m.id);
+
+    expect(listMissions(db)).toHaveLength(0);
+    expect(listMissions(db, { archived: true }).map((x) => x.id)).toEqual([m.id]);
+  });
+
+  it("records when it was archived rather than a flag", () => {
+    const m = createMission(db, { title: "Old", source: "free", prompt: "p" });
+    archiveMission(db, m.id);
+
+    const [found] = listMissions(db, { archived: true });
+    expect(found?.archivedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("restores an archived mission", () => {
+    const m = createMission(db, { title: "Old", source: "free", prompt: "p" });
+    archiveMission(db, m.id);
+    restoreMission(db, m.id);
+
+    expect(listMissions(db).map((x) => x.id)).toEqual([m.id]);
+  });
+
+  // Nothing is destroyed: the transcript is the record of what an agent did.
+  it("keeps the transcript and the mission row", () => {
+    const m = createMission(db, { title: "Old", source: "free", prompt: "p" });
+    appendEvent(db, m.id, "agent.assistant", { text: "hello" });
+    archiveMission(db, m.id);
+
+    expect(getMission(db, m.id)).toBeDefined();
+    expect(listEvents(db, m.id, 0)).toHaveLength(2);
+  });
+
+  it("leaves a live mission out of the archived view", () => {
+    createMission(db, { title: "Live", source: "free", prompt: "p" });
+    expect(listMissions(db, { archived: true })).toHaveLength(0);
+  });
+
+  it("does not count an archived mission as awaiting input", () => {
+    const m = createMission(db, { title: "Old", source: "free", prompt: "p" });
+    setStatus(db, m.id, MISSION_STATUS.AWAITING_INPUT);
+    expect(countAwaitingInput(db)).toBe(1);
+
+    archiveMission(db, m.id);
+    expect(countAwaitingInput(db)).toBe(0);
   });
 });
 

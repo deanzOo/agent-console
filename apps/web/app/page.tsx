@@ -4,6 +4,7 @@ import { getDatabase } from "@agent-console/core/db";
 import { countAwaitingInput, listMissions } from "@agent-console/core/missions";
 import { MISSION_STATUSES } from "@agent-console/core/schema";
 import { isSetupComplete } from "@agent-console/core/settings";
+import { ArchiveButton } from "./archive-button";
 import { FilterBar } from "./filter-bar";
 import { NewMissionForm } from "./new-mission-form";
 
@@ -25,15 +26,20 @@ function asStatus(value: string | undefined) {
 export default async function Dashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; view?: string }>;
 }) {
-  const { q, status } = await searchParams;
+  const { q, status, view } = await searchParams;
+  const archived = view === "archived";
   const db = getDatabase();
   // First run lands on the wizard. Every other page is reached from here, so
   // one check covers the app without risking a redirect loop on /setup itself.
   if (!isSetupComplete(db)) redirect("/setup");
 
-  const missions = listMissions(db, { query: q, status: asStatus(status) });
+  const missions = listMissions(db, {
+    query: q,
+    status: asStatus(status),
+    archived,
+  });
   const waiting = countAwaitingInput(db);
 
   return (
@@ -60,20 +66,29 @@ export default async function Dashboard({
               label: value.replace("_", " "),
             })),
           },
+          {
+            name: "view",
+            label: "Active",
+            choices: [{ value: "archived", label: "Archived" }],
+          },
         ]}
       />
 
       {missions.length === 0 ? (
         <p className="text-sm text-neutral-500">
-          {q || status ? "No mission matches that filter." : "No missions yet."}
+          {archived
+            ? "Nothing archived."
+            : q || status
+              ? "No mission matches that filter."
+              : "No missions yet."}
         </p>
       ) : (
         <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">
           {missions.map((mission) => (
-            <li key={mission.id}>
+            <li key={mission.id} className="flex items-center gap-2 py-3">
               <Link
                 href={`/missions/${mission.id}`}
-                className="flex items-center justify-between gap-3 py-3"
+                className="flex min-w-0 flex-1 items-center justify-between gap-3"
               >
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{mission.title}</span>
@@ -89,6 +104,7 @@ export default async function Dashboard({
                   {mission.status.replace("_", " ")}
                 </span>
               </Link>
+              <ArchiveButton missionId={mission.id} archived={archived} />
             </li>
           ))}
         </ul>
