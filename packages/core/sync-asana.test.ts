@@ -3,40 +3,40 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { openDatabase, type Db } from "./db";
+import { syncAsana } from "./sync";
 
-// Hoisted with the mock, because vi.mock is lifted above ordinary declarations.
 interface MockState {
-  searched: unknown[];
+  searched: string[];
   workspaces: { gid: string }[];
 }
 
-const state = vi.hoisted((): MockState => ({
-  searched: [],
-  workspaces: [{ gid: "w1" }, { gid: "w2" }],
-}));
+const state: MockState = { searched: [], workspaces: [] };
 
-function toolResult(json: unknown) {
-  return { content: [{ type: "text", text: JSON.stringify(json) }] };
-}
-
-vi.mock("./mcp/client", () => ({
-  callTool: vi.fn(
-    async (_spec: unknown, tool: string, args: Record<string, unknown>) => {
-      if (tool === "asana_list_workspaces") {
-        return toolResult({ data: state.workspaces });
+function stubAsana(failWith?: { status: number; message: string }) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (failWith) {
+        return Response.json(
+          { errors: [{ message: failWith.message }] },
+          { status: failWith.status },
+        );
       }
-      state.searched.push(args.workspace);
-      return toolResult({
+      if (url.endsWith("/workspaces")) {
+        return Response.json({ data: state.workspaces });
+      }
+
+      const workspace = new URL(url).searchParams.get("workspace") ?? "";
+      state.searched.push(workspace);
+      return Response.json({
         data:
-          args.workspace === "w1"
+          workspace === "w1"
             ? [{ gid: "t1", name: "One", completed: false }]
             : [{ gid: "t2", name: "Two", completed: false }],
       });
-    },
-  ),
-}));
-
-const { syncAsana } = await import("./sync");
+    }),
+  );
+}
 
 let dir: string;
 let db: Db;
@@ -44,11 +44,13 @@ let db: Db;
 beforeEach(() => {
   state.searched = [];
   state.workspaces = [{ gid: "w1" }, { gid: "w2" }];
+  stubAsana();
   dir = mkdtempSync(path.join(tmpdir(), "asana-"));
   db = openDatabase(path.join(dir, "data.db"), path.join(process.cwd(), "drizzle"));
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   db.$client.close();
   rmSync(dir, { recursive: true, force: true });
 });
@@ -60,22 +62,37 @@ describe("syncAsana", () => {
     const result = await syncAsana(db, "token");
 
     expect(state.searched).toEqual(["w1", "w2"]);
-    expect(result.tasks).toBe(2);
-    expect(result.workspaces).toBe(2);
+    expect(result).toEqual({ tasks: 2, workspaces: 2 });
+  });
+
+  // Asana explains itself properly. Swallowing that is exactly how a
+  // premium-only endpoint looked like an empty account.
+  it("surfaces an Asana error rather than reporting no tasks", async () => {
+    stubAsana({ status: 402, message: "Search is only available to premium users." });
+
+    await expect(syncAsana(db, "token")).rejects.toThrow(/premium users/);
+  });
+
+  it("asks for your incomplete tasks, with the fields the cache stores", async () => {
+    await syncAsana(db, "token");
+
+    const urls = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+    const taskCall = urls.find((url) => url.includes("/tasks?")) ?? "";
+
+    expect(taskCall).toContain("assignee=me");
+    expect(taskCall).toContain("completed_since=now");
+    expect(taskCall).toContain("opt_fields=");
   });
 
   it("reports zero workspaces rather than pretending to have looked", async () => {
     state.workspaces = [];
 
-    const result = await syncAsana(db, "token");
-
-    expect(result).toEqual({ tasks: 0, workspaces: 0 });
+    expect(await syncAsana(db, "token")).toEqual({ tasks: 0, workspaces: 0 });
     expect(state.searched).toEqual([]);
   });
 
   it("stores what it found", async () => {
     await syncAsana(db, "token");
-    const rows = db.$client.prepare("SELECT gid FROM asana_cache ORDER BY gid").all();
-    expect(rows).toHaveLength(2);
+    expect(db.$client.prepare("SELECT gid FROM asana_cache").all()).toHaveLength(2);
   });
 });
