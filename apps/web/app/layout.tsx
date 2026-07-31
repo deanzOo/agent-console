@@ -5,6 +5,10 @@ import { Nav } from "./nav";
 export const metadata: Metadata = {
   title: "Agent Console",
   description: "Control panel for Claude Code agents running on your server",
+  // iOS ignores the manifest for both of these: without them an installed app
+  // gets a screenshot for an icon and a browser chrome it cannot escape.
+  appleWebApp: { capable: true, title: "Agents", statusBarStyle: "black-translucent" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
 };
 
 // Nothing here is static: every page reads SQLite and live session state, and
