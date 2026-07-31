@@ -128,6 +128,14 @@ post() {
   report "$code" "$expected" "$label"
 }
 
+post_as_user() {
+  local path="$1" body="$2" expected="$3" label="$4" jar="$5"
+  local code
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -b "$jar" \
+    -X POST -H 'content-type: application/json' -d "$body" "$BASE$path")"
+  report "$code" "$expected" "$label"
+}
+
 report() {
   local code="$1" expected="$2" label="$3"
   if [ "$code" = "$expected" ]; then
@@ -157,8 +165,14 @@ check /setup         200 "/setup (unconfigured)"
 check /api/setup     200 "/api/setup (unconfigured)"
 check /api/missions  401 "/api/missions (anonymous)"
 
+# Setting the password is what closes the wizard to anonymous callers, so it
+# must hand back a session — otherwise the very next step, and Finish, are 401
+# and the operator is locked out of the flow they are standing in.
 post /api/setup "{\"step\":\"password\",\"password\":\"$TEST_PASSWORD\"}" \
-  200 "set the first password"
+  200 "set the first password" "$JAR"
+
+post_as_user /api/setup "{\"step\":\"finish\"}" 200 "finish setup with that session" "$JAR"
+post /api/setup "{\"step\":\"finish\"}" 401 "finish setup anonymously"
 
 check /setup         307 "/setup (configured, anonymous)"
 check /api/setup     401 "/api/setup (configured, anonymous)"
