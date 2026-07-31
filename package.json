@@ -16,15 +16,15 @@
     "build": "npm run build -w @agent-console/web",
     "start": "npm run start -w @agent-console/web",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p packages/core && tsc --noEmit -p apps/web",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p packages/core && tsc --noEmit -p apps/web && tsc --noEmit -p apps/agentd",
     "dupes": "jscpd",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "graph": "graphify .",
-    "graph:update": "graphify . --update",
+    "graph": "GRAPHIFY_FORCE=1 graphify update .",
+    "graph:update": "graphify update .",
     "prepare": "husky",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
@@ -64,6 +64,7 @@
     "@types/web-push": "^3.6.4",
     "@vitest/coverage-v8": "^4.1.10",
     "drizzle-kit": "^0.31.10",
+    "esbuild": "^0.25.12",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.2.12",
     "fast-check": "^4.9.0",
@@ -84,6 +85,6 @@
     "minimatch": "^10.2.6",
     "postcss": "^8.5.25",
     "sharp": "^0.35.3",
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.12"
   }
 }

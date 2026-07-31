@@ -1,0 +1,15 @@
+{
+  "name": "@agent-console/agentd",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Session host: owns live agent runs so restarting the UI cannot kill them",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild server.ts --bundle --platform=node --format=esm --outfile=dist/server.mjs --external:better-sqlite3 --external:@anthropic-ai/claude-agent-sdk --external:@modelcontextprotocol/sdk --external:web-push",
+    "start": "node dist/server.mjs"
+  },
+  "dependencies": {
+    "@agent-console/core": "*",
+    "zod": "^4.4.3"
+  }
+}

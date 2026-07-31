@@ -19,6 +19,7 @@ export interface AppConfig {
   readonly claudeCodeOauthToken: string | undefined;
   readonly claudeCliPath: string | undefined;
   readonly migrationsDir: string;
+  readonly agentdPort: number;
   /** Either credential works; the CLI's own login is a third path we cannot see. */
   readonly hasAnthropicCredential: boolean;
   readonly githubToken: string | undefined;
@@ -60,6 +61,10 @@ const schema = z.object({
   CLAUDE_CODE_OAUTH_TOKEN: blankAsUndefined,
   CLAUDE_CLI_PATH: blankAsUndefined,
   MIGRATIONS_DIR: blankAsUndefined,
+  AGENTD_PORT: z.preprocess(
+    (value) => (value === undefined || value === "" ? 3100 : Number(value)),
+    z.number().int().min(1).max(65535),
+  ),
   GITHUB_TOKEN: blankAsUndefined,
   ASANA_TOKEN: blankAsUndefined,
 });
@@ -148,6 +153,7 @@ export function parseEnv(
     anthropicApiKey: env.ANTHROPIC_API_KEY,
     claudeCodeOauthToken: env.CLAUDE_CODE_OAUTH_TOKEN,
     migrationsDir: env.MIGRATIONS_DIR ?? path.join(process.cwd(), "drizzle"),
+    agentdPort: env.AGENTD_PORT,
     claudeCliPath: env.CLAUDE_CLI_PATH,
     hasAnthropicCredential: Boolean(
       env.ANTHROPIC_API_KEY ?? env.CLAUDE_CODE_OAUTH_TOKEN,

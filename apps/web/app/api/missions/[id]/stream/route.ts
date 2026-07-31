@@ -1,11 +1,16 @@
 import { getDatabase } from "@agent-console/core/db";
 import { getMission, listEvents } from "@agent-console/core/missions";
-import { getSession } from "@agent-console/core/agents/manager";
 import { formatSseEvent, parseSince } from "@agent-console/core/sse";
+import { streamEvents } from "@/lib/agentd";
 
 export const dynamic = "force-dynamic";
 
-const HEARTBEAT_MS = 25_000;
+const SSE_HEADERS = {
+  "content-type": "text/event-stream; charset=utf-8",
+  "cache-control": "no-cache, no-transform",
+  connection: "keep-alive",
+  "x-accel-buffering": "no",
+};
 
 export async function GET(
   request: Request,
@@ -24,51 +29,31 @@ export async function GET(
     request.headers.get("last-event-id") ?? url.searchParams.get("since"),
   );
 
+  const outcome = await streamEvents(id, since, request.signal);
+  if (outcome.ok && outcome.value) {
+    return new Response(outcome.value, { headers: SSE_HEADERS });
+  }
+
+  // A refusal is a real error and is surfaced as one. Only an unreachable host
+  // falls through to a replay, because only then is the mission still fine.
+  if (!outcome.ok && outcome.reason === "rejected") {
+    return Response.json(outcome.body ?? { error: "stream_failed" }, {
+      status: outcome.status,
+    });
+  }
+
+  // The session host is restarting. The transcript so far still exists, so
+  // replay it and say so, rather than showing an empty or broken stream.
   const encoder = new TextEncoder();
-  const session = getSession(id);
-
-  const stream = new ReadableStream<Uint8Array>({
+  const replay = new ReadableStream<Uint8Array>({
     start(controller) {
-      let closed = false;
-      const send = (chunk: string) => {
-        if (!closed) controller.enqueue(encoder.encode(chunk));
-      };
-
-      // Replay the gap first. A phone that slept resumes exactly where it was.
-      let cursor = since;
       for (const event of listEvents(db, id, since)) {
-        send(formatSseEvent(event));
-        cursor = event.seq;
+        controller.enqueue(encoder.encode(formatSseEvent(event)));
       }
-
-      const unsubscribe = session?.subscribe((event) => {
-        if (event.seq <= cursor) return;
-        cursor = event.seq;
-        send(formatSseEvent(event));
-      });
-
-      // Proxies drop an idle connection; a comment frame is not an event.
-      const heartbeat = setInterval(() => send(": keep-alive\n\n"), HEARTBEAT_MS);
-
-      const close = () => {
-        if (closed) return;
-        closed = true;
-        clearInterval(heartbeat);
-        unsubscribe?.();
-        controller.close();
-      };
-
-      request.signal.addEventListener("abort", close, { once: true });
-      if (!session) close();
+      controller.enqueue(encoder.encode("event: agentd.unreachable\ndata: {}\n\n"));
+      controller.close();
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      "content-type": "text/event-stream; charset=utf-8",
-      "cache-control": "no-cache, no-transform",
-      connection: "keep-alive",
-      "x-accel-buffering": "no",
-    },
-  });
+  return new Response(replay, { headers: SSE_HEADERS });
 }

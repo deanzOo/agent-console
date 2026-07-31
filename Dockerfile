@@ -14,6 +14,7 @@ COPY package.json package-lock.json ./
 # Manifests only, so editing source does not invalidate the install layer.
 COPY packages/core/package.json ./packages/core/
 COPY apps/web/package.json ./apps/web/
+COPY apps/agentd/package.json ./apps/agentd/
 RUN npm ci
 
 FROM node:22-bookworm-slim AS build
@@ -22,7 +23,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Boot-time config is absent during build; these satisfy the parser only.
-RUN AUTH_MODE=trusted-network npm run build
+RUN AUTH_MODE=trusted-network npm run build \
+ && npm run build -w @agent-console/agentd
 
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
@@ -71,6 +73,9 @@ COPY --chown=agent:agent package.json ./
 COPY --chown=agent:agent apps/web/package.json apps/web/next.config.ts ./apps/web/
 COPY --chown=agent:agent drizzle ./drizzle
 COPY --chown=agent:agent apps/web/public ./apps/web/public
+# The session host ships as one bundled file; its sources are not in the image.
+COPY --from=build --chown=agent:agent /app/apps/agentd/dist ./apps/agentd/dist
+COPY --chown=agent:agent deploy/entrypoint.sh ./deploy/entrypoint.sh
 
 # Never root: the agent can do anything this user can.
 USER agent
@@ -84,4 +89,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD ["node", "-e", "fetch(`http://127.0.0.1:${process.env.PORT||3000}/login`).then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["npm", "start"]
+CMD ["bash", "deploy/entrypoint.sh"]

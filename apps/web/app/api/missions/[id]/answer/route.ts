@@ -1,19 +1,10 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { getDatabase } from "@agent-console/core/db";
-import { answerPrompt, getMission } from "@agent-console/core/missions";
-import { getSession } from "@agent-console/core/agents/manager";
+import { answerPrompt as recordAnswer, getMission } from "@agent-console/core/missions";
+import { answerPromptSchema } from "@agent-console/core/protocol";
+import { answerPrompt } from "@/lib/agentd";
 
 export const dynamic = "force-dynamic";
-
-const answerSchema = z.discriminatedUnion("decision", [
-  z.object({ promptId: z.string().min(1), decision: z.literal("allow") }),
-  z.object({
-    promptId: z.string().min(1),
-    decision: z.literal("deny"),
-    message: z.string().trim().min(1).default("Denied by the operator."),
-  }),
-]);
 
 export async function POST(
   request: Request,
@@ -26,7 +17,7 @@ export async function POST(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const parsed = answerSchema.safeParse(await request.json());
+  const parsed = answerPromptSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json(
       { error: "invalid_request", issues: parsed.error.issues },
@@ -34,22 +25,17 @@ export async function POST(
     );
   }
 
-  const session = getSession(id);
-  if (!session) {
-    return NextResponse.json({ error: "session_not_running" }, { status: 409 });
+  const outcome = await answerPrompt(id, parsed.data);
+  if (!outcome.ok) {
+    return outcome.reason === "unreachable"
+      ? NextResponse.json({ error: "agentd_unreachable" }, { status: 503 })
+      : NextResponse.json(outcome.body ?? { error: "failed" }, {
+          status: outcome.status,
+        });
   }
 
-  const handled = session.answer(
-    parsed.data.promptId,
-    parsed.data.decision === "allow"
-      ? { behavior: "allow" }
-      : { behavior: "deny", message: parsed.data.message },
-  );
-
-  if (!handled) {
-    return NextResponse.json({ error: "prompt_not_pending" }, { status: 409 });
-  }
-
-  answerPrompt(db, parsed.data.promptId);
+  // Marked answered only once the session has accepted it, so a lost reply
+  // cannot leave a prompt that looks handled and an agent still waiting.
+  recordAnswer(db, parsed.data.promptId);
   return NextResponse.json({ ok: true });
 }

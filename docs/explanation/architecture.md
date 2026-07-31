@@ -6,17 +6,32 @@
 phone ──https──> reverse proxy / Cloudflare edge (authenticates)
                      │
                      ▼
-          next start  (ONE node process)
-          ├── app/            pages and route handlers (thin)
-          ├── lib/agents/     session manager — the core
-          ├── lib/auth/       adapter per AUTH_MODE
-          ├── lib/mcp/        stdio MCP clients (each optional)
-          ├── lib/repos.ts    bare clone + worktree lifecycle
-          └── SQLite          missions, transcript, settings
+          apps/web — next start          the console. Redeployable at will
+          ├── app/                       pages and route handlers (thin)
+          ├── middleware.ts              the auth boundary. Lives only here
+          └── lib/agentd.ts              speaks to the session host over loopback
+                     │
+                     │ http + SSE, 127.0.0.1 only
+                     ▼
+          apps/agentd                    the session host. Restarting it kills missions
+          ├── Map<missionId, session>    live runs and parked permission promises
+          └── SSE fan-out                replay from SQLite, then tail
+                     │
+          packages/core                  shared by both; imports no framework
+          ├── auth/  mcp/  repos.ts      adapters, MCP clients, worktree lifecycle
+          └── SQLite                     missions, transcript, settings
                      │
                      ├── agent session → cwd = $WORKSPACE_ROOT/wt/<missionId>/
                      └── git worktrees ← $WORKSPACE_ROOT/repos/<repo>.git (bare)
 ```
+
+**Why two processes.** Sessions live in memory, so whichever process holds them cannot be restarted without
+killing every mission in flight. Keeping them in the web app meant a CSS change dropped a running agent.
+`agentd` is the part that must stay up; `web` is the part that changes daily. Splitting them is what makes
+the second deployable without consequence.
+
+`agentd` binds loopback and has no authentication of its own — authentication lives in `web`, and exposing
+`agentd` to a network would hand out an unauthenticated agent runner.
 
 ## The core loop
 

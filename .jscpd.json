@@ -13,6 +13,8 @@
     "**/.next/**",
     "**/.jscpd/**",
     "**/*.test.ts",
-    "**/package-lock.json"
+    "**/package-lock.json",
+    "**/dist/**",
+    "graphify-out/**"
   ]
 }

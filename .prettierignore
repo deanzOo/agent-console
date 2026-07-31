@@ -6,3 +6,7 @@ CHANGELOG.md
 package-lock.json
 trivy-results.sarif
 drizzle/meta/
+
+# Generated: the agentd bundle and the code graph.
+dist/
+graphify-out/

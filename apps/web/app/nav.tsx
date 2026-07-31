@@ -3,6 +3,7 @@ import { getConfig } from "@agent-console/core/env";
 import { getFeatures } from "@agent-console/core/features";
 import { getDatabase } from "@agent-console/core/db";
 import { resolveCredentials } from "@agent-console/core/settings";
+import { PushToggle } from "./push-toggle";
 import { SyncButton } from "./sync-button";
 
 export function Nav() {
@@ -24,7 +25,12 @@ export function Nav() {
       </Link>
       {features.github && <Link href="/issues">Issues</Link>}
       {features.asana && <Link href="/tasks">Tasks</Link>}
-      <Link href="/setup" className={showSync ? "" : "ml-auto"}>
+      {features.push && (
+        <span className={showSync ? "" : "ml-auto"}>
+          <PushToggle />
+        </span>
+      )}
+      <Link href="/setup" className={showSync || features.push ? "" : "ml-auto"}>
         Setup
       </Link>
       {showSync && (
