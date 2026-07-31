@@ -1,3 +1,4 @@
+import { mkdirSync } from "node:fs";
 import { getConfig } from "@/config/env";
 import { getDatabase } from "../db";
 import { getMission, setStatus, type MissionSource } from "../missions";
@@ -41,17 +42,27 @@ export async function launchMission(input: LaunchInput): Promise<string> {
   });
 
   try {
-    const cwd = await prepareWorkspace(mission.id, input);
+    const cwd = (await prepareWorkspace(mission.id, input)) ?? config.workspaceRoot;
+    // A missing cwd makes the spawn fail with ENOENT, which the Agent SDK
+    // reports as the binary being unlaunchable — an error naming libc and the
+    // dynamic loader, nowhere near the actual cause. Same reason db.ts creates
+    // the database's directory rather than trusting it to be there.
+    mkdirSync(cwd, { recursive: true });
+
     const session = new MissionSession(db, mission.id);
     sessions.set(mission.id, session);
 
     session.start(createSdkDriver(), {
       missionId: mission.id,
       prompt: input.prompt,
-      cwd: cwd ?? config.workspaceRoot,
+      cwd,
       resume: getMission(db, mission.id)?.sessionId ?? undefined,
     });
   } catch (error) {
+    // The session is registered before it starts, so a throw from start()
+    // would otherwise leave a dead one in the map — counted by runningCount()
+    // and handed out by getSession() for a mission that never ran.
+    sessions.delete(mission.id);
     setStatus(db, mission.id, "failed");
     throw error;
   }

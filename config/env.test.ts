@@ -168,6 +168,19 @@ describe("parseEnv", () => {
     it("does not fail boot without one, since the CLI's own login may cover it", () => {
       expect(() => parse()).not.toThrow();
     });
+
+    // The SDK ships its own prebuilt binary and prefers it. That binary is
+    // linked against a libc that need not match the host, so a deployment has
+    // to be able to name the CLI it knows works.
+    it("reads an explicit path to the Claude CLI", () => {
+      expect(parse({ CLAUDE_CLI_PATH: "/usr/local/bin/claude" }).claudeCliPath).toBe(
+        "/usr/local/bin/claude",
+      );
+    });
+
+    it("leaves the CLI path unset so the SDK picks its own", () => {
+      expect(parse().claudeCliPath).toBeUndefined();
+    });
   });
 
   describe("optional credentials", () => {

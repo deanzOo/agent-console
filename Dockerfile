@@ -26,7 +26,10 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000 \
     DATA_DIR=/data \
-    WORKSPACE_ROOT=/workspace
+    WORKSPACE_ROOT=/workspace \
+    # The SDK would otherwise prefer the binary it ships, which is linked
+    # against a libc this image does not have and fails at mission start.
+    CLAUDE_CLI_PATH=/usr/local/bin/claude
 
 ARG GH_VERSION=2.96.0
 ARG TARGETARCH
