@@ -59,6 +59,10 @@ export async function launchMission(input: LaunchInput): Promise<string> {
       resume: getMission(db, mission.id)?.sessionId ?? undefined,
     });
   } catch (error) {
+    // The session is registered before it starts, so a throw from start()
+    // would otherwise leave a dead one in the map — counted by runningCount()
+    // and handed out by getSession() for a mission that never ran.
+    sessions.delete(mission.id);
     setStatus(db, mission.id, "failed");
     throw error;
   }
