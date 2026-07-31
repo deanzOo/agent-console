@@ -2,13 +2,10 @@ import { NextResponse } from "next/server";
 import { getConfig } from "@agent-console/core/env";
 import { getFeatures } from "@agent-console/core/features";
 import { getDatabase } from "@agent-console/core/db";
-import { repos } from "@agent-console/core/schema";
 import { resolveCredentials } from "@agent-console/core/settings";
 import { syncAsana, syncIssues, syncRepos } from "@agent-console/core/sync";
 
 export const dynamic = "force-dynamic";
-
-const MAX_REPOS_PER_SYNC = 10;
 
 export async function POST() {
   const db = getDatabase();
@@ -25,13 +22,13 @@ export async function POST() {
   // the other's results.
   if (features.github && resolved.githubToken) {
     try {
-      await syncRepos(db, resolved.githubToken);
-      const tracked = db.select({ fullName: repos.fullName }).from(repos).all();
-      result.issues = await syncIssues(
-        db,
-        resolved.githubToken,
-        tracked.slice(0, MAX_REPOS_PER_SYNC).map((row) => row.fullName),
-      );
+      // Every repository with open issues, not the first ten of them. The cap
+      // that used to live here truncated silently, so a sync that reached a
+      // fraction of the repositories reported plain success.
+      const synced = await syncRepos(db, resolved.githubToken);
+      result.issues = await syncIssues(db, resolved.githubToken, synced.withOpenIssues);
+      result.repos = synced.all.length;
+      result.reposWithIssues = synced.withOpenIssues.length;
     } catch (error) {
       result.githubError = error instanceof Error ? error.message : String(error);
     }

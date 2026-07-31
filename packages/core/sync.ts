@@ -62,9 +62,21 @@ export async function syncIssues(
   return total;
 }
 
-export async function syncRepos(db: Db, token: string): Promise<string[]> {
+export interface RepoSync {
+  /** Every repository the token can see. */
+  readonly all: string[];
+  /**
+   * Those with at least one open issue. GitHub already tells us the count when
+   * it lists repositories, so asking the rest for their issues is a request per
+   * repository that can only come back empty.
+   */
+  readonly withOpenIssues: string[];
+}
+
+export async function syncRepos(db: Db, token: string): Promise<RepoSync> {
   const payload = await githubJson(token, "/user/repos?per_page=100&sort=updated");
   const names: string[] = [];
+  const withOpenIssues: string[] = [];
 
   for (const entry of Array.isArray(payload) ? payload : []) {
     const fullName = Object(entry).full_name;
@@ -72,6 +84,9 @@ export async function syncRepos(db: Db, token: string): Promise<string[]> {
     if (typeof fullName !== "string") continue;
 
     names.push(fullName);
+    // Absent rather than zero means GitHub did not say, so it is worth asking.
+    const openIssues: unknown = Object(entry).open_issues_count;
+    if (typeof openIssues !== "number" || openIssues > 0) withOpenIssues.push(fullName);
     db.insert(repos)
       .values({
         fullName,
@@ -85,7 +100,7 @@ export async function syncRepos(db: Db, token: string): Promise<string[]> {
       .run();
   }
 
-  return names;
+  return { all: names, withOpenIssues };
 }
 
 export async function syncAsana(db: Db, token: string): Promise<number> {
