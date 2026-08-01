@@ -84,9 +84,10 @@ function readToolResult(
   return { text: "(no output)", failed };
 }
 
+// Reasoning is how it got there, not what it did. It stays reachable as raw,
+// because when something goes wrong it is the first thing worth reading.
 function fromAssistant(payload: Record<string, unknown>): TranscriptEntry {
-  const thinking = asString(payload.thinking);
-  if (thinking) return { kind: "thinking", text: thinking };
+  if (asString(payload.thinking) !== "") return { kind: "hidden" };
 
   for (const block of contentBlocks(payload)) {
     if (block.type === "text" && asString(block.text) !== "") {
@@ -96,9 +97,7 @@ function fromAssistant(payload: Record<string, unknown>): TranscriptEntry {
       const name = asString(block.name) || "a tool";
       return { kind: "tool", name, summary: describeToolInput(name, block.input) };
     }
-    if (block.type === "thinking" && asString(block.thinking) !== "") {
-      return { kind: "thinking", text: asString(block.thinking) };
-    }
+    if (block.type === "thinking") return { kind: "hidden" };
   }
   return { kind: "hidden" };
 }
@@ -116,12 +115,18 @@ function fromUser(payload: Record<string, unknown>): TranscriptEntry {
   return { kind: "hidden" };
 }
 
+// A mission flips between running and awaiting_input on every approval — in one
+// real transcript that was seventy lines saying nothing. Only the end of a
+// mission is worth a line, and an error always is.
+const TERMINAL_STATUSES = ["done", "failed", "stopped"];
+
 function fromStatus(payload: Record<string, unknown>): TranscriptEntry {
   const status = asString(payload.status).replace("_", " ");
   const error = asString(payload.error);
-  return error
-    ? { kind: "status", text: status, error }
-    : { kind: "status", text: status };
+
+  if (error) return { kind: "status", text: status, error };
+  if (!TERMINAL_STATUSES.includes(asString(payload.status))) return { kind: "hidden" };
+  return { kind: "status", text: status };
 }
 
 export function summarise(event: StoredEvent): TranscriptEntry {
@@ -134,12 +139,17 @@ export function summarise(event: StoredEvent): TranscriptEntry {
       return fromUser(payload);
     case "mission.status":
       return fromStatus(payload);
+    case "mission.said":
+      return { kind: "said", who: "operator", text: asString(payload.text) };
+    case "mission.mode":
+      return { kind: "note", text: `mode changed to ${asString(payload.mode)}` };
     case "mission.created":
       return { kind: "said", who: "operator", text: asString(payload.prompt) };
-    case "mission.prompt": {
-      const name = asString(payload.toolName) || "a question";
-      return { kind: "asked", name, summary: describeToolInput(name, payload.input) };
-    }
+    // The tool call it belongs to is already in the transcript, saying the same
+    // thing, and the approval itself is pinned to the bottom of the screen
+    // while it is open. A third copy is noise.
+    case "mission.prompt":
+      return { kind: "hidden" };
     case "agent.result": {
       const failed = payload.is_error === true;
       return { kind: "status", text: failed ? "failed" : "finished" };

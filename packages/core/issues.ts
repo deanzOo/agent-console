@@ -91,6 +91,17 @@ export function listIssues(db: Db, filter: IssueFilter): CachedIssue[] {
     .all();
 }
 
+/** How many match, without loading them: the nav wants a number. */
+export function countIssues(db: Db, filter: IssueFilter = {}): number {
+  const conditions = conditionsFor(filter);
+  const row = db
+    .select({ count: sql<number>`count(*)` })
+    .from(issuesCache)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .get();
+  return row?.count ?? 0;
+}
+
 export function listIssueOrgs(db: Db): string[] {
   return db
     .selectDistinct({ repo: issuesCache.repo })

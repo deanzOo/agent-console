@@ -30,6 +30,8 @@ function fakeDriver() {
   let failure: Error | undefined;
   let canUseTool: CanUseTool | undefined;
   let interrupted = false;
+  const said: string[] = [];
+  const modes: string[] = [];
 
   const run: AgentRun = {
     messages: {
@@ -46,6 +48,12 @@ function fakeDriver() {
           });
         }
       },
+    },
+    say: (text: string) => {
+      said.push(text);
+    },
+    setMode: async (mode: string) => {
+      modes.push(mode);
     },
     interrupt: async () => {
       interrupted = true;
@@ -81,6 +89,8 @@ function fakeDriver() {
       failure = error;
       wake();
     },
+    said,
+    modes,
     requestTool(name: string, input: Record<string, unknown> = {}) {
       if (!canUseTool) throw new Error("session not started");
       return canUseTool(name, input, { signal: new AbortController().signal });
@@ -273,5 +283,78 @@ describe("MissionSession", () => {
       await session.stop();
       await expect(decision).resolves.toMatchObject({ behavior: "deny" });
     });
+  });
+});
+
+describe("speaking to a running session", () => {
+  it("delivers the operator's words to the agent", async () => {
+    const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
+    const fake = fakeDriver();
+    const session = new MissionSession(db, mission.id);
+    session.start(fake.driver, { missionId: mission.id, prompt: "go", cwd: "/tmp" });
+
+    expect(session.say("actually, use the other file")).toBe(true);
+    expect(fake.said).toEqual(["actually, use the other file"]);
+
+    fake.finish();
+    await session.stop();
+  });
+
+  // Without this the transcript shows the agent changing course for no reason.
+  it("records what was said in the transcript", async () => {
+    const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
+    const fake = fakeDriver();
+    const session = new MissionSession(db, mission.id);
+    session.start(fake.driver, { missionId: mission.id, prompt: "go", cwd: "/tmp" });
+
+    session.say("hello");
+
+    const events = listEvents(db, mission.id, 0);
+    expect(events.some((e) => e.type === "mission.said")).toBe(true);
+
+    fake.finish();
+    await session.stop();
+  });
+
+  it("refuses to speak to a session that never started", () => {
+    const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
+    expect(new MissionSession(db, mission.id).say("hello")).toBe(false);
+  });
+});
+
+describe("changing permission mode", () => {
+  it("passes the new mode to the run", async () => {
+    const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
+    const fake = fakeDriver();
+    const session = new MissionSession(db, mission.id);
+    session.start(fake.driver, { missionId: mission.id, prompt: "go", cwd: "/tmp" });
+
+    expect(await session.setMode("plan")).toBe(true);
+    expect(fake.modes).toEqual(["plan"]);
+
+    fake.finish();
+    await session.stop();
+  });
+
+  // A transcript where approvals simply stop appearing is worse than one that
+  // says the posture changed and to what.
+  it("records the change", async () => {
+    const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
+    const fake = fakeDriver();
+    const session = new MissionSession(db, mission.id);
+    session.start(fake.driver, { missionId: mission.id, prompt: "go", cwd: "/tmp" });
+
+    await session.setMode("acceptEdits");
+
+    const events = listEvents(db, mission.id, 0);
+    expect(JSON.stringify(events)).toContain("acceptEdits");
+
+    fake.finish();
+    await session.stop();
+  });
+
+  it("refuses on a session that never started", async () => {
+    const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
+    expect(await new MissionSession(db, mission.id).setMode("plan")).toBe(false);
   });
 });

@@ -29,7 +29,12 @@ export const launchMissionSchema = z.object({
 export const DEFAULT_DENIAL_MESSAGE = "Denied by the operator.";
 
 export const answerPromptSchema = z.discriminatedUnion("decision", [
-  z.object({ promptId: z.string().min(1), decision: z.literal("allow") }),
+  z.object({
+    promptId: z.string().min(1),
+    decision: z.literal("allow"),
+    /** Stop asking about this tool for the rest of the mission. */
+    always: z.boolean().optional(),
+  }),
   z.object({
     promptId: z.string().min(1),
     decision: z.literal("deny"),

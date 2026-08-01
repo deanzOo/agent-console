@@ -8,6 +8,7 @@ import {
   answerPrompt,
   appendEvent,
   countAwaitingInput,
+  countMissions,
   archiveMission,
   createMission,
   getMission,
@@ -82,6 +83,68 @@ describe("recordWorkspace", () => {
     const found = getMission(db, m.id);
     expect(found?.branch).toBe("agent/thing-abc");
     expect(found?.worktreePath).toBe("/workspace/wt/abc");
+  });
+});
+
+describe("active and finished", () => {
+  function seeded() {
+    const live = createMission(db, { title: "live", source: "free", prompt: "p" });
+    setStatus(db, live.id, MISSION_STATUS.AWAITING_INPUT);
+    const done = createMission(db, { title: "done", source: "free", prompt: "p" });
+    setStatus(db, done.id, MISSION_STATUS.DONE);
+    const failed = createMission(db, { title: "failed", source: "free", prompt: "p" });
+    setStatus(db, failed.id, MISSION_STATUS.FAILED);
+    return { live, done, failed };
+  }
+
+  // Active is what is happening now; finished is everything that is over. A
+  // list mixing them buries the one mission that needs an answer.
+  it("lists only what is still going", () => {
+    const { live } = seeded();
+    expect(listMissions(db, { active: true }).map((m) => m.id)).toEqual([live.id]);
+  });
+
+  it("lists everything that is over", () => {
+    const { done, failed } = seeded();
+    expect(
+      listMissions(db, { finished: true })
+        .map((m) => m.id)
+        .sort(),
+    ).toEqual([done.id, failed.id].sort());
+  });
+
+  it("excludes archived from both", () => {
+    const { live, done } = seeded();
+    archiveMission(db, live.id);
+    archiveMission(db, done.id);
+
+    expect(listMissions(db, { active: true })).toHaveLength(0);
+    expect(listMissions(db, { finished: true })).toHaveLength(1);
+  });
+});
+
+describe("countMissions", () => {
+  it("counts only active missions", () => {
+    createMission(db, { title: "a", source: "free", prompt: "p" });
+    const archived = createMission(db, { title: "b", source: "free", prompt: "p" });
+    archiveMission(db, archived.id);
+
+    expect(countMissions(db)).toBe(1);
+  });
+
+  it("counts the archived when asked", () => {
+    const archived = createMission(db, { title: "b", source: "free", prompt: "p" });
+    archiveMission(db, archived.id);
+
+    expect(countMissions(db, { archived: true })).toBe(1);
+  });
+
+  it("counts a status", () => {
+    const m = createMission(db, { title: "a", source: "free", prompt: "p" });
+    setStatus(db, m.id, MISSION_STATUS.DONE);
+    createMission(db, { title: "b", source: "free", prompt: "p" });
+
+    expect(countMissions(db, { status: MISSION_STATUS.DONE })).toBe(1);
   });
 });
 

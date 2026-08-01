@@ -5,6 +5,7 @@ import path from "node:path";
 import { openDatabase, type Db } from "./db";
 import { issuesCache } from "./schema";
 import {
+  countIssues,
   listIssueLabels,
   listIssueOrgs,
   listIssuePage,
@@ -179,5 +180,16 @@ describe("listIssueRepos", () => {
 
   it("narrows to one organisation", () => {
     expect(listIssueRepos(db, { org: "acme" })).toEqual(["acme/api", "acme/web"]);
+  });
+});
+
+describe("countIssues", () => {
+  it("counts everything when nothing is asked for", () => {
+    expect(countIssues(db)).toBe(4);
+  });
+
+  it("counts what matches a filter", () => {
+    expect(countIssues(db, { repo: "acme/web" })).toBe(2);
+    expect(countIssues(db, { query: "search" })).toBe(2);
   });
 });

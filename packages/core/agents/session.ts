@@ -12,6 +12,7 @@ import { buildNotification, deliver, type NotificationKind } from "../notify";
 import { configuredChannels } from "../notify-channels";
 import { MISSION_STATUS, PROMPT_KIND } from "../schema";
 import { PendingPrompts } from "./pending";
+import type { ApprovalMode, Policy } from "./policy";
 
 export type EventListener = (event: StoredEvent) => void;
 
@@ -34,11 +35,16 @@ export interface AgentDriver {
       input: Record<string, unknown>,
       options: { signal: AbortSignal },
     ) => Promise<PermissionResult>;
+    /** Read per tool call: the operator changes this while the agent works. */
+    policy: () => Policy;
   }): AgentRun;
 }
 
 export interface AgentRun {
   readonly messages: AsyncIterable<SDKMessage>;
+  /** Sends the operator's words to a session that is already running. */
+  say(text: string): void;
+  setMode(mode: ApprovalMode): Promise<void>;
   interrupt(): Promise<void>;
   close(): void;
 }
@@ -49,6 +55,10 @@ export class MissionSession {
   readonly #pending = new PendingPrompts();
   readonly #listeners = new Set<EventListener>();
   #run: AgentRun | undefined;
+  #mode: ApprovalMode = "default";
+  // Per mission, and only in memory: a standing "yes" to a shell should not
+  // outlive the session the operator granted it in.
+  readonly #allowed = new Set<string>();
   #finished: Promise<void> | undefined;
 
   constructor(db: Db, missionId: string) {
@@ -70,6 +80,7 @@ export class MissionSession {
       resume: options.resume,
       canUseTool: (toolName, input, { signal }) =>
         this.#requestPermission(toolName, input, signal),
+      policy: () => ({ mode: this.#mode, allowed: this.#allowed }),
     });
 
     setStatus(this.#db, this.#missionId, MISSION_STATUS.RUNNING);
@@ -95,6 +106,30 @@ export class MissionSession {
     this.#pending.cancelAll("Session stopped.");
     this.#run?.close();
     await this.#finished;
+  }
+
+  /** The operator speaking mid-mission, recorded before it is delivered. */
+  say(text: string): boolean {
+    if (!this.#run) return false;
+    this.#record("mission.said", { text });
+    this.#run.say(text);
+    return true;
+  }
+
+  /** Stops asking about this tool for the rest of the mission. */
+  alwaysAllow(toolName: string): void {
+    this.#allowed.add(toolName);
+    this.#record("mission.allowed", { toolName });
+  }
+
+  async setMode(mode: ApprovalMode): Promise<boolean> {
+    if (!this.#run) return false;
+    this.#mode = mode;
+    await this.#run.setMode(mode);
+    // Recorded, because a transcript where approvals simply stop appearing is
+    // worse than one that says the posture changed and to what.
+    this.#record("mission.mode", { mode });
+    return true;
   }
 
   async #requestPermission(

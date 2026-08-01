@@ -1,7 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { z } from "zod";
 import { getConfig } from "@agent-console/core/env";
 import { getDatabase } from "@agent-console/core/db";
-import { getMission, listEvents } from "@agent-console/core/missions";
+import { getMission, listEvents, openPrompts } from "@agent-console/core/missions";
 import {
   getSession,
   launchMission,
@@ -22,6 +23,12 @@ const openStreams = new Set<() => void>();
 // A sentinel rather than a throw: the parse failure is expected input, and
 // unwinding for it would be indistinguishable from a real fault.
 const MALFORMED = Symbol("malformed-json");
+
+const saySchema = z.object({ text: z.string().trim().min(1).max(10_000) });
+
+// bypassPermissions is deliberately absent: it would make an approval console
+// pointless, and the agent has a shell in a container holding a git token.
+const modeSchema = z.object({ mode: z.enum(["default", "acceptEdits", "plan"]) });
 
 const HEARTBEAT_MS = 25_000;
 const MAX_BODY_BYTES = 1_000_000;
@@ -194,6 +201,29 @@ async function handle(
     return;
   }
 
+  if (route.action === "say") {
+    const body = await readJson(request);
+    const parsed = body === MALFORMED ? undefined : saySchema.safeParse(body);
+    if (!parsed?.success) {
+      json(response, 400, { error: "invalid_request" });
+      return;
+    }
+    json(response, session.say(parsed.data.text) ? 200 : 409, { ok: true });
+    return;
+  }
+
+  if (route.action === "mode") {
+    const body = await readJson(request);
+    const parsed = body === MALFORMED ? undefined : modeSchema.safeParse(body);
+    if (!parsed?.success) {
+      json(response, 400, { error: "invalid_mode" });
+      return;
+    }
+    const changed = await session.setMode(parsed.data.mode);
+    json(response, changed ? 200 : 409, { ok: changed });
+    return;
+  }
+
   if (route.action === "interrupt") {
     await session.interrupt();
     json(response, 200, { ok: true });
@@ -210,6 +240,15 @@ async function handle(
     json(response, 400, { error: "invalid_request", issues: parsed.error.issues });
     return;
   }
+  // Remembered before the answer, so the tool the operator just approved is
+  // already allowed if the agent asks for it again immediately.
+  if (parsed.data.decision === "allow" && parsed.data.always) {
+    const prompt = openPrompts(getDatabase(), route.id).find(
+      (open) => open.id === parsed.data.promptId,
+    );
+    if (prompt?.toolName) session.alwaysAllow(prompt.toolName);
+  }
+
   const handled = session.answer(
     parsed.data.promptId,
     parsed.data.decision === "allow"

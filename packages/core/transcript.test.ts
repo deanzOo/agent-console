@@ -88,13 +88,46 @@ describe("summarise", () => {
     expect(entry).toMatchObject({ kind: "output", text: "(no output)" });
   });
 
-  it("surfaces a reasoning block", () => {
-    expect(
-      summarise(event("agent.assistant", { thinking: "weighing options" })),
-    ).toEqual({
-      kind: "thinking",
-      text: "weighing options",
+  // Reasoning is how it got there, not what it did. Still reachable as raw.
+  it("hides reasoning", () => {
+    expect(summarise(event("agent.assistant", { thinking: "weighing" }))).toEqual({
+      kind: "hidden",
     });
+  });
+
+  // The tool call says the same thing, and the approval is pinned to the screen
+  // while it is open. A third copy is noise.
+  it("hides the approval request, which the tool call already shows", () => {
+    expect(
+      summarise(
+        event("mission.prompt", {
+          promptId: "p1",
+          toolName: "Bash",
+          input: { command: "rm -rf build" },
+        }),
+      ),
+    ).toEqual({ kind: "hidden" });
+  });
+
+  // A mission flips between running and awaiting_input on every approval: in one
+  // real transcript that was seventy lines saying nothing.
+  it.each(["running", "awaiting_input", "starting"])(
+    "hides the %s status",
+    (status) => {
+      expect(summarise(event("mission.status", { status }))).toEqual({
+        kind: "hidden",
+      });
+    },
+  );
+
+  it.each(["done", "failed", "stopped"])("keeps the %s status", (status) => {
+    expect(summarise(event("mission.status", { status })).kind).toBe("status");
+  });
+
+  it("always keeps a status that carries an error", () => {
+    expect(
+      summarise(event("mission.status", { status: "running", error: "boom" })),
+    ).toMatchObject({ kind: "status", error: "boom" });
   });
 
   it("carries the error on a failed status", () => {
@@ -109,18 +142,6 @@ describe("summarise", () => {
       who: "operator",
       text: "Fix the bug",
     });
-  });
-
-  it("describes what is being asked for", () => {
-    expect(
-      summarise(
-        event("mission.prompt", {
-          promptId: "p1",
-          toolName: "Bash",
-          input: { command: "rm -rf build" },
-        }),
-      ),
-    ).toEqual({ kind: "asked", name: "Bash", summary: "rm -rf build" });
   });
 
   // The init payload lists every tool, command and skill available. It is a

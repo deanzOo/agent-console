@@ -63,6 +63,16 @@ export function listTaskPage(db: Db, filter: TaskFilter): TaskPage {
   return { tasks, total: counted?.total ?? 0 };
 }
 
+/** How many match, without loading them: the nav wants a number. */
+export function countTasks(db: Db, filter: TaskFilter = {}): number {
+  const row = db
+    .select({ count: sql<number>`count(*)` })
+    .from(asanaCache)
+    .where(and(...conditionsFor(filter)))
+    .get();
+  return row?.count ?? 0;
+}
+
 export interface TaskWorkspace {
   readonly gid: string;
   readonly name: string;
