@@ -17,15 +17,16 @@ concurrency:
 
 jobs:
   summarise:
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # The summary is a diff against the base, which a shallow clone cannot
           # compute.
           fetch-depth: 0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
 
@@ -40,9 +41,21 @@ jobs:
             echo 'PR_SUMMARY_EOF'
           } >> "$GITHUB_OUTPUT"
 
+      # Always written, including for a pull request from a fork, where posting
+      # a comment is impossible. The summary is still one click away in the run.
+      - name: Show it in the run
+        env:
+          BODY: ${{ steps.summary.outputs.body }}
+        run: printf '## PR summary\n\n%s\n' "$BODY" >> "$GITHUB_STEP_SUMMARY"
+
       # Edited in place rather than appended: a new comment on every push turns
       # a busy pull request into a wall of stale summaries.
+      #
+      # Skipped for a fork, where GITHUB_TOKEN is read-only however the workflow
+      # declares its permissions — without this every outside contributor's pull
+      # request fails a job they cannot fix.
       - name: Post it
+        if: github.event.pull_request.head.repo.full_name == github.repository
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.number }}
