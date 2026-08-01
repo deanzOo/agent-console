@@ -8,6 +8,7 @@
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import path from "node:path";
 
 const MIGRATIONS = "drizzle/";
 const CONFIG_CONTRACT = ".env.example";
@@ -85,9 +86,33 @@ export function summarize(numstat) {
   return { totals, touched };
 }
 
-function ratio(totals) {
-  if (totals.app.added === 0) return undefined;
-  return Math.round((totals.test.added / totals.app.added) * 100);
+/**
+ * Coverage for the files this change touches.
+ *
+ * The codebase-wide number barely moves and says nothing about the change in
+ * front of the reviewer. A file the change touched that no test reaches is the
+ * thing worth seeing, and lines written is only ever a proxy for it.
+ */
+function patchCoverage(touched, reportPath) {
+  let report;
+  try {
+    report = JSON.parse(readFileSync(reportPath, "utf8"));
+  } catch {
+    return [];
+  }
+
+  const root = process.cwd();
+  const rows = [];
+  for (const file of touched) {
+    const entry = report[path.resolve(root, file)];
+    if (!entry) continue;
+    rows.push({
+      file,
+      lines: entry.lines?.pct ?? 0,
+      branches: entry.branches?.pct ?? 0,
+    });
+  }
+  return rows;
 }
 
 function checkpoints(touched) {
@@ -139,7 +164,20 @@ function codebaseRatio() {
   }
 }
 
-export function render({ totals, touched }, includeCodebase = false) {
+function coverageSection(rows) {
+  if (rows.length === 0) return [];
+
+  return [
+    "",
+    "**Coverage of the files this change touches**",
+    "",
+    "| File | Lines | Branches |",
+    "| --- | ---: | ---: |",
+    ...rows.map((row) => `| \`${row.file}\` | ${row.lines}% | ${row.branches}% |`),
+  ];
+}
+
+export function render({ totals, touched }, includeCodebase = false, coverage = []) {
   if (touched.length === 0) return "No files changed.";
 
   const rows = [
@@ -154,13 +192,12 @@ export function render({ totals, touched }, includeCodebase = false) {
         `| ${label} | ${bucket.files} | +${bucket.added} | −${bucket.removed} |`,
     );
 
-  const proportion = ratio(totals);
   const verdict =
     totals.app.added === 0
       ? "No application code changed."
-      : proportion === 0
+      : totals.test.added === 0
         ? "**This change carries no test code.**"
-        : `Test lines per application line: **${proportion}%**`;
+        : `${totals.test.added} test lines alongside ${totals.app.added} of application code.`;
 
   const overall = includeCodebase ? codebaseRatio() : undefined;
 
@@ -171,12 +208,20 @@ export function render({ totals, touched }, includeCodebase = false) {
     "",
     verdict,
     ...(overall ? [overall] : []),
+    ...coverageSection(coverage),
     "",
     ...checkpoints(touched),
   ].join("\n");
 }
 
-const base = process.argv[2];
+const flags = process.argv.slice(2);
+const coverageAt = flags.indexOf("--coverage");
+const reportPath = coverageAt === -1 ? undefined : flags[coverageAt + 1];
+const base = flags.find(
+  (flag, index) => !flag.startsWith("--") && index !== coverageAt + 1,
+);
 // Off when reading a fixture on stdin: the ratio would be that of whatever
 // repository the test happens to run in.
-process.stdout.write(`${render(summarize(await readNumstat(base)), Boolean(base))}\n`);
+const summary = summarize(await readNumstat(base));
+const coverage = reportPath ? patchCoverage(summary.touched, reportPath) : [];
+process.stdout.write(`${render(summary, Boolean(base), coverage)}\n`);

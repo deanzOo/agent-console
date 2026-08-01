@@ -55,6 +55,11 @@
     "command": "bash scripts/check-no-hardcoded-config.sh"
   },
   {
+    "id": "temp-files",
+    "name": "Temporary file safety",
+    "command": "bash scripts/check-temp-files.sh"
+  },
+  {
     "id": "signatures",
     "name": "Registry signatures",
     "command": "npm audit signatures"

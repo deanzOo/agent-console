@@ -31,7 +31,8 @@ The loop:
 
 Applies to every feature and every bugfix. A bugfix starts with a test that reproduces the bug.
 
-Coverage thresholds (90% lines/functions/statements, 85% branches on `lib/`, `config/`, `middleware.ts`) are
+Coverage thresholds (93% lines, 92% functions and statements, 86% branches across `packages/core`, the
+route handlers and `apps/web/lib`) are
 a **backstop**, not the rule. Coverage cannot tell whether a test was written first. Hitting the number with
 tests bolted on afterwards is a violation even though CI is green.
 
@@ -214,20 +215,21 @@ The check list lives in **[`ci/checks.json`](ci/checks.json)**, and both sides r
 iterates it, and the GitHub matrix is built from it with `fromJSON`. A check therefore cannot exist in one
 place and not the other. **Add a check there and nowhere else.**
 
-| Check               | What it gates                                                              |
-| ------------------- | -------------------------------------------------------------------------- |
-| Typecheck           | `tsc --noEmit`, strict, `noUncheckedIndexedAccess`                         |
-| Lint                | ESLint — no `any`, no assertions, no unused, 300-line cap                  |
-| Markdown            | markdownlint                                                               |
-| Documentation links | Every relative link in a `.md` resolves                                    |
-| Format              | Prettier. Formatting is not a review topic                                 |
-| Duplication         | jscpd, 2% threshold. Tests excluded — duplication there is usually clarity |
-| Tests + coverage    | vitest + thresholds                                                        |
-| Build               | `next build`                                                               |
-| Dependency audit    | `npm audit --audit-level=high`                                             |
-| No hardcoded config | Rejects credential shapes and deployment-specific literals                 |
-| Deep scan           | Trivy: secrets and IaC misconfiguration                                    |
-| Secret history scan | gitleaks over the whole history, not just the tree                         |
+| Check                 | What it gates                                                              |
+| --------------------- | -------------------------------------------------------------------------- |
+| Typecheck             | `tsc --noEmit`, strict, `noUncheckedIndexedAccess`                         |
+| Lint                  | ESLint — no `any`, no assertions, no unused, 300-line cap                  |
+| Markdown              | markdownlint                                                               |
+| Documentation links   | Every relative link in a `.md` resolves                                    |
+| Format                | Prettier. Formatting is not a review topic                                 |
+| Duplication           | jscpd, 2% threshold. Tests excluded — duplication there is usually clarity |
+| Tests + coverage      | vitest + thresholds                                                        |
+| Build                 | `next build`                                                               |
+| Dependency audit      | `npm audit --audit-level=high`                                             |
+| No hardcoded config   | Rejects credential shapes and deployment-specific literals                 |
+| Temporary file safety | Rejects a temp file at a path someone else could create first              |
+| Deep scan             | Trivy: secrets and IaC misconfiguration                                    |
+| Secret history scan   | gitleaks over the whole history, not just the tree                         |
 
 Hooks are convenience, not the boundary — `--no-verify` skips them, so everything runs again in CI.
 

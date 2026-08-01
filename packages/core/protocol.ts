@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { APPROVAL_MODES } from "./agents/policy";
 import { MISSION_SOURCES } from "./schema";
 
 // The vocabulary that crosses the process boundary between the console and the
@@ -42,5 +43,11 @@ export const answerPromptSchema = z.discriminatedUnion("decision", [
   }),
 ]);
 
+// The console accepted any non-empty string here and left it to the session
+// host to refuse, so a mode neither of them allows reached the boundary between
+// them before anything objected.
+export const setModeSchema = z.object({ mode: z.enum(APPROVAL_MODES) });
+
 export type LaunchMissionInput = z.infer<typeof launchMissionSchema>;
 export type AnswerPromptInput = z.infer<typeof answerPromptSchema>;
+export type SetModeInput = z.infer<typeof setModeSchema>;
