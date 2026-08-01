@@ -1,15 +1,5 @@
 import type { HookInput, PermissionResult } from "@anthropic-ai/claude-agent-sdk";
-
-// Auto-approved: reading and inspecting cannot surprise the operator, and
-// stopping for permission on every `grep` would make the console unusable.
-// Everything else — Bash, Write, Edit, anything networked — is asked about.
-export const READ_ONLY_TOOLS = [
-  "Read",
-  "Glob",
-  "Grep",
-  "NotebookRead",
-  "TodoWrite",
-] as const;
+import { autoApproves, type Policy } from "./policy";
 
 const HOOK_EVENT = "PreToolUse";
 
@@ -51,7 +41,9 @@ function decision(
 // callback at all. A PreToolUse hook is asked about every call, which is what
 // an approval console has to have: with canUseTool alone the agent ran Bash
 // unattended and the operator was never asked.
-export function createPermissionHook(ask: AskOperator) {
+// The policy is read per call rather than captured: the operator changes the
+// mode, and adds to what is already allowed, while the session is running.
+export function createPermissionHook(ask: AskOperator, policy: () => Policy) {
   return async function preToolUse(
     input: HookInput,
     _toolUseId: unknown,
@@ -62,9 +54,7 @@ export function createPermissionHook(ask: AskOperator) {
     if (input.hook_event_name !== HOOK_EVENT) return decision("allow");
 
     const toolName = input.tool_name;
-    if (READ_ONLY_TOOLS.some((tool) => tool === toolName)) {
-      return decision("allow");
-    }
+    if (autoApproves(policy(), toolName)) return decision("allow");
 
     const result = await ask(toolName, asRecord(input.tool_input), {
       signal: options.signal,

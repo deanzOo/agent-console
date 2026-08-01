@@ -36,7 +36,9 @@ export async function POST() {
 
   if (features.asana && resolved.asanaToken) {
     try {
-      result.tasks = await syncAsana(db, resolved.asanaToken);
+      const asana = await syncAsana(db, resolved.asanaToken);
+      result.tasks = asana.tasks;
+      result.workspaces = asana.workspaces;
     } catch (error) {
       result.asanaError = error instanceof Error ? error.message : String(error);
     }

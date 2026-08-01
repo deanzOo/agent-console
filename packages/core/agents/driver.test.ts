@@ -18,12 +18,13 @@ vi.mock("../env", () => ({ getConfig: getConfigMock }));
 
 const { createSdkDriver } = await import("./driver");
 
-function start(claudeCliPath: string | undefined) {
+function start(claudeCliPath: string | undefined, token?: string) {
   getConfigMock.mockReturnValue({ claudeCliPath });
-  createSdkDriver().start({
+  createSdkDriver(token).start({
     prompt: "hi",
     cwd: "/tmp/wt",
     canUseTool: async () => ({ behavior: "allow", updatedInput: {} }),
+    policy: () => ({ mode: "default" as const, allowed: new Set<string>() }),
   });
   return queryMock.mock.calls.at(-1)?.[0].options;
 }
@@ -53,6 +54,30 @@ describe("createSdkDriver", () => {
     });
   });
 
+  // Agents commit, push a branch and open the pull request themselves, which
+  // they cannot do with no credential — every mission got as far as the final
+  // step and stopped there, saying so.
+  it("gives the agent the configured GitHub token", () => {
+    const options = start("/usr/local/bin/claude", "ghp_token");
+    const env = options?.env;
+
+    expect(env).toMatchObject({ GH_TOKEN: "ghp_token" });
+  });
+
+  // The SDK spawns the CLI with exactly this environment, so dropping the
+  // inherited one takes PATH and HOME with it.
+  it("keeps the environment it inherited", () => {
+    const options = start("/usr/local/bin/claude", "ghp_token");
+
+    expect(options?.env).toMatchObject({ PATH: process.env.PATH });
+  });
+
+  it("passes no credential when none is configured", () => {
+    const options = start("/usr/local/bin/claude");
+
+    expect(options?.env).not.toHaveProperty("GH_TOKEN");
+  });
+
   // Stopping a mission and cleaning it up both go through here. A driver that
   // swallowed either would leave a session running with nothing pointing at it.
   it("forwards interrupt and close to the SDK handle", async () => {
@@ -61,6 +86,7 @@ describe("createSdkDriver", () => {
       prompt: "hi",
       cwd: "/tmp/wt",
       canUseTool: async () => ({ behavior: "allow", updatedInput: {} }),
+      policy: () => ({ mode: "default" as const, allowed: new Set<string>() }),
     });
     const handle = queryMock.mock.results.at(-1)?.value;
 

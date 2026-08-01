@@ -1,7 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { z } from "zod";
 import { getConfig } from "@agent-console/core/env";
 import { getDatabase } from "@agent-console/core/db";
-import { getMission, listEvents } from "@agent-console/core/missions";
+import { getMission, listEvents, openPrompts } from "@agent-console/core/missions";
 import {
   getSession,
   launchMission,
@@ -9,7 +10,9 @@ import {
   stopMission,
 } from "@agent-console/core/agents/manager";
 import type { StoredEvent } from "@agent-console/core/missions";
-import { formatSseEvent, parseSince } from "@agent-console/core/sse";
+import { reconcileOrphans } from "@agent-console/core/agents/orphans";
+import { recoverMissions } from "@agent-console/core/agents/manager";
+import { formatSseEvent, HEARTBEAT_MS, parseSince } from "@agent-console/core/sse";
 import { answerPromptSchema, launchMissionSchema } from "@agent-console/core/protocol";
 import { matchRoute } from "./routes";
 
@@ -22,7 +25,12 @@ const openStreams = new Set<() => void>();
 // unwinding for it would be indistinguishable from a real fault.
 const MALFORMED = Symbol("malformed-json");
 
-const HEARTBEAT_MS = 25_000;
+const saySchema = z.object({ text: z.string().trim().min(1).max(10_000) });
+
+// bypassPermissions is deliberately absent: it would make an approval console
+// pointless, and the agent has a shell in a container holding a git token.
+const modeSchema = z.object({ mode: z.enum(["default", "acceptEdits", "plan"]) });
+
 const MAX_BODY_BYTES = 1_000_000;
 
 function json(response: ServerResponse, status: number, body: unknown): void {
@@ -193,6 +201,29 @@ async function handle(
     return;
   }
 
+  if (route.action === "say") {
+    const body = await readJson(request);
+    const parsed = body === MALFORMED ? undefined : saySchema.safeParse(body);
+    if (!parsed?.success) {
+      json(response, 400, { error: "invalid_request" });
+      return;
+    }
+    json(response, session.say(parsed.data.text) ? 200 : 409, { ok: true });
+    return;
+  }
+
+  if (route.action === "mode") {
+    const body = await readJson(request);
+    const parsed = body === MALFORMED ? undefined : modeSchema.safeParse(body);
+    if (!parsed?.success) {
+      json(response, 400, { error: "invalid_mode" });
+      return;
+    }
+    const changed = await session.setMode(parsed.data.mode);
+    json(response, changed ? 200 : 409, { ok: changed });
+    return;
+  }
+
   if (route.action === "interrupt") {
     await session.interrupt();
     json(response, 200, { ok: true });
@@ -209,6 +240,15 @@ async function handle(
     json(response, 400, { error: "invalid_request", issues: parsed.error.issues });
     return;
   }
+  // Remembered before the answer, so the tool the operator just approved is
+  // already allowed if the agent asks for it again immediately.
+  if (parsed.data.decision === "allow" && parsed.data.always) {
+    const prompt = openPrompts(getDatabase(), route.id).find(
+      (open) => open.id === parsed.data.promptId,
+    );
+    if (prompt?.toolName) session.alwaysAllow(prompt.toolName);
+  }
+
   const handled = session.answer(
     parsed.data.promptId,
     parsed.data.decision === "allow"
@@ -224,8 +264,33 @@ async function handle(
 
 const config = getConfig();
 
+// The registry is empty at startup by definition, so anything the database
+// still calls live is a mission whose session died with the last process.
+// Leaving them alone strands the operator: the console offers approvals that
+// answer with session_not_running, and the mission can be neither advanced nor
+// dismissed.
+// Prompts left open on a mission that already finished can never be answered
+// either, so they are closed regardless of what happens to the live ones.
+reconcileOrphans(getDatabase());
+
+// Missions interrupted by the last restart come back where they can, rather
+// than being lost to a deploy.
+void recoverMissions().then(({ resumed, stopped }) => {
+  if (resumed > 0 || stopped > 0) {
+    process.stdout.write(`agentd: resumed ${resumed}, stopped ${stopped}\n`);
+  }
+});
+
 const server = createServer((request, response) => {
   handle(request, response).catch((error: unknown) => {
+    // Logged as well as returned: the response goes to whoever asked, and when
+    // that is a fetch inside a route handler the reason is lost the moment the
+    // request ends. This is the only place that keeps it.
+    process.stderr.write(
+      `agentd: ${request.method} ${request.url} failed: ${
+        error instanceof Error ? error.message : String(error)
+      }\n`,
+    );
     if (!response.headersSent) {
       json(response, 500, { error: error instanceof Error ? error.message : "failed" });
       return;

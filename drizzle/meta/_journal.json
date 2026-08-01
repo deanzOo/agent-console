@@ -15,6 +15,13 @@
       "when": 1785510611016,
       "tag": "0001_groovy_ben_urich",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785530936311,
+      "tag": "0002_big_morlun",
+      "breakpoints": true
     }
   ]
 }

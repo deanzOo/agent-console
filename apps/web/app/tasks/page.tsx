@@ -1,15 +1,35 @@
 import { notFound } from "next/navigation";
-import { asc, eq } from "drizzle-orm";
 import { getConfig } from "@agent-console/core/env";
 import { getFeatures } from "@agent-console/core/features";
 import { getDatabase } from "@agent-console/core/db";
-import { asanaCache } from "@agent-console/core/schema";
+import {
+  listTaskPage,
+  listTaskProjects,
+  listTaskWorkspaces,
+} from "@agent-console/core/tasks";
 import { resolveCredentials } from "@agent-console/core/settings";
+import { FilterBar } from "../filter-bar";
+import { Pager } from "../pager";
 import { StartFromSource } from "../start-from-source";
 
 export const dynamic = "force-dynamic";
 
-export default function TasksPage() {
+const PAGE_SIZE = 25;
+
+export default async function TasksPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    q?: string;
+    workspace?: string;
+    project?: string;
+    view?: string;
+    from?: string;
+  }>;
+}) {
+  const { q, workspace, project, view, from } = await searchParams;
+  const offset = Math.max(0, Number.parseInt(from ?? "", 10) || 0);
+  const completed = view === "completed";
   const db = getDatabase();
   const config = getConfig();
   const resolved = resolveCredentials(db, {
@@ -19,21 +39,47 @@ export default function TasksPage() {
 
   if (!getFeatures(resolved).asana) notFound();
 
-  const tasks = db
-    .select()
-    .from(asanaCache)
-    .where(eq(asanaCache.completed, false))
-    .orderBy(asc(asanaCache.dueOn))
-    .limit(100)
-    .all();
+  const { tasks, total } = listTaskPage(db, {
+    workspace,
+    project,
+    query: q,
+    completed,
+    limit: PAGE_SIZE,
+    offset,
+  });
+  const projects = listTaskProjects(db);
+  const workspaces = listTaskWorkspaces(db);
 
   return (
     <main className="space-y-4">
       <h1 className="text-lg font-semibold">Asana tasks</h1>
 
+      <FilterBar
+        placeholder="Search tasks"
+        selectors={[
+          {
+            name: "workspace",
+            label: "All workspaces",
+            choices: workspaces.map((w) => ({ value: w.gid, label: w.name })),
+          },
+          {
+            name: "project",
+            label: "All projects",
+            choices: projects.map((name) => ({ value: name, label: name })),
+          },
+          {
+            name: "view",
+            label: "Open",
+            choices: [{ value: "completed", label: "Completed" }],
+          },
+        ]}
+      />
+
       {tasks.length === 0 ? (
         <p className="text-sm text-neutral-500">
-          Nothing cached yet. Run a sync from the dashboard.
+          {q || workspace || project || completed
+            ? "No task matches that filter."
+            : "Nothing cached yet. Run a sync from the dashboard."}
         </p>
       ) : (
         <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">
@@ -59,6 +105,15 @@ export default function TasksPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {tasks.length > 0 && (
+        <Pager
+          total={total}
+          shown={tasks.length}
+          offset={offset}
+          pageSize={PAGE_SIZE}
+        />
       )}
     </main>
   );

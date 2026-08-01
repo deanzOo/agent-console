@@ -24,7 +24,11 @@ export interface LaunchInput {
 }
 
 export type Answer =
-  | { readonly promptId: string; readonly decision: "allow" }
+  | {
+      readonly promptId: string;
+      readonly decision: "allow";
+      readonly always?: boolean | undefined;
+    }
   | { readonly promptId: string; readonly decision: "deny"; readonly message: string };
 
 function baseUrl(): string {
@@ -82,6 +86,44 @@ export function answerPrompt(
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(answer),
+    },
+    asJson,
+  );
+}
+
+export function stopMission(missionId: string): Promise<AgentdOutcome<unknown>> {
+  return send(
+    `/missions/${encodeURIComponent(missionId)}/stop`,
+    { method: "POST" },
+    asJson,
+  );
+}
+
+export function sayToMission(
+  missionId: string,
+  text: string,
+): Promise<AgentdOutcome<unknown>> {
+  return send(
+    `/missions/${encodeURIComponent(missionId)}/say`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+    },
+    asJson,
+  );
+}
+
+export function setMissionMode(
+  missionId: string,
+  mode: string,
+): Promise<AgentdOutcome<unknown>> {
+  return send(
+    `/missions/${encodeURIComponent(missionId)}/mode`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode }),
     },
     asJson,
   );

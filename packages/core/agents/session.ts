@@ -6,12 +6,19 @@ import {
   recordPrompt,
   setSessionId,
   setStatus,
+  type MissionStatus,
   type StoredEvent,
 } from "../missions";
-import { buildNotification, deliver, type NotificationKind } from "../notify";
+import {
+  buildNotification,
+  deliver,
+  isNotifiable,
+  type NotificationKind,
+} from "../notify";
 import { configuredChannels } from "../notify-channels";
 import { MISSION_STATUS, PROMPT_KIND } from "../schema";
 import { PendingPrompts } from "./pending";
+import type { ApprovalMode, Policy } from "./policy";
 
 export type EventListener = (event: StoredEvent) => void;
 
@@ -34,11 +41,16 @@ export interface AgentDriver {
       input: Record<string, unknown>,
       options: { signal: AbortSignal },
     ) => Promise<PermissionResult>;
+    /** Read per tool call: the operator changes this while the agent works. */
+    policy: () => Policy;
   }): AgentRun;
 }
 
 export interface AgentRun {
   readonly messages: AsyncIterable<SDKMessage>;
+  /** Sends the operator's words to a session that is already running. */
+  say(text: string): void;
+  setMode(mode: ApprovalMode): Promise<void>;
   interrupt(): Promise<void>;
   close(): void;
 }
@@ -49,6 +61,10 @@ export class MissionSession {
   readonly #pending = new PendingPrompts();
   readonly #listeners = new Set<EventListener>();
   #run: AgentRun | undefined;
+  #mode: ApprovalMode = "default";
+  // Per mission, and only in memory: a standing "yes" to a shell should not
+  // outlive the session the operator granted it in.
+  readonly #allowed = new Set<string>();
   #finished: Promise<void> | undefined;
 
   constructor(db: Db, missionId: string) {
@@ -70,6 +86,7 @@ export class MissionSession {
       resume: options.resume,
       canUseTool: (toolName, input, { signal }) =>
         this.#requestPermission(toolName, input, signal),
+      policy: () => ({ mode: this.#mode, allowed: this.#allowed }),
     });
 
     setStatus(this.#db, this.#missionId, MISSION_STATUS.RUNNING);
@@ -79,10 +96,7 @@ export class MissionSession {
 
   answer(promptId: string, result: PermissionResult): boolean {
     const handled = this.#pending.resolve(promptId, result);
-    if (handled) {
-      setStatus(this.#db, this.#missionId, MISSION_STATUS.RUNNING);
-      this.#record("mission.status", { status: MISSION_STATUS.RUNNING });
-    }
+    if (handled) this.#settle(MISSION_STATUS.RUNNING);
     return handled;
   }
 
@@ -95,6 +109,33 @@ export class MissionSession {
     this.#pending.cancelAll("Session stopped.");
     this.#run?.close();
     await this.#finished;
+  }
+
+  /** The operator speaking mid-mission, recorded before it is delivered. */
+  say(text: string): boolean {
+    if (!this.#run) return false;
+    this.#record("mission.said", { text });
+    // A finished mission is still live and still takes a reply, which puts it
+    // back to work.
+    this.#settle(MISSION_STATUS.RUNNING);
+    this.#run.say(text);
+    return true;
+  }
+
+  /** Stops asking about this tool for the rest of the mission. */
+  alwaysAllow(toolName: string): void {
+    this.#allowed.add(toolName);
+    this.#record("mission.allowed", { toolName });
+  }
+
+  async setMode(mode: ApprovalMode): Promise<boolean> {
+    if (!this.#run) return false;
+    this.#mode = mode;
+    await this.#run.setMode(mode);
+    // Recorded, because a transcript where approvals simply stop appearing is
+    // worse than one that says the posture changed and to what.
+    this.#record("mission.mode", { mode });
+    return true;
   }
 
   async #requestPermission(
@@ -121,20 +162,28 @@ export class MissionSession {
       for await (const message of run.messages) {
         this.#captureSessionId(message);
         this.#record(`agent.${message.type}`, message);
+        // Streaming input holds the stream open for a reply, so the agent
+        // finishing a turn is the only signal that it stopped working.
+        if (message.type === "result") this.#settle(MISSION_STATUS.DONE);
       }
-      setStatus(this.#db, this.#missionId, MISSION_STATUS.DONE);
-      this.#record("mission.status", { status: MISSION_STATUS.DONE });
-      this.#notify(MISSION_STATUS.DONE);
+      this.#settle(MISSION_STATUS.DONE);
     } catch (error) {
-      setStatus(this.#db, this.#missionId, MISSION_STATUS.FAILED);
-      this.#record("mission.status", {
-        status: MISSION_STATUS.FAILED,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      this.#notify(MISSION_STATUS.FAILED);
+      this.#settle(
+        MISSION_STATUS.FAILED,
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
       this.#pending.cancelAll("Session ended.");
     }
+  }
+
+  /** Records a status the mission has reached, once. */
+  #settle(status: MissionStatus, error?: string): void {
+    if (getMission(this.#db, this.#missionId)?.status === status) return;
+
+    setStatus(this.#db, this.#missionId, status);
+    this.#record("mission.status", error ? { status, error } : { status });
+    if (isNotifiable(status)) this.#notify(status);
   }
 
   #captureSessionId(message: SDKMessage): void {

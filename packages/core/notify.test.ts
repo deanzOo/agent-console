@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildNotification, deliver, type Deliverer } from "./notify";
+import { buildNotification, deliver, isNotifiable, type Deliverer } from "./notify";
+import { MISSION_STATUS } from "./schema";
 
 describe("buildNotification", () => {
   it("leads with the fact that the agent is blocked", () => {
@@ -96,4 +97,22 @@ describe("deliver", () => {
     };
     await expect(deliver([failing], message)).resolves.toHaveLength(1);
   });
+});
+
+describe("isNotifiable", () => {
+  it.each([MISSION_STATUS.AWAITING_INPUT, MISSION_STATUS.DONE, MISSION_STATUS.FAILED])(
+    "wakes the operator for %s",
+    (status) => {
+      expect(isNotifiable(status)).toBe(true);
+    },
+  );
+
+  // Nothing here is news: the operator caused it, or it is the mission simply
+  // getting on with the work.
+  it.each([MISSION_STATUS.STARTING, MISSION_STATUS.RUNNING, MISSION_STATUS.STOPPED])(
+    "stays quiet for %s",
+    (status) => {
+      expect(isNotifiable(status)).toBe(false);
+    },
+  );
 });

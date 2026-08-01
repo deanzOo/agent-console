@@ -1,12 +1,37 @@
 import { mkdirSync } from "node:fs";
 import { getConfig } from "../env";
-import { getDatabase } from "../db";
-import { getMission, setStatus, type MissionSource } from "../missions";
+import { getDatabase, type Db } from "../db";
+import {
+  appendEvent,
+  getMission,
+  recordWorkspace,
+  setStatus,
+  type MissionSource,
+} from "../missions";
+import { MISSION_STATUS } from "../schema";
 import { branchNameFor } from "../repos";
 import { createWorktree, defaultBranch, ensureBareClone } from "../git";
+import { closeOpenPrompts } from "./orphans";
+import { planRecovery } from "./recover";
 import { createSdkDriver } from "./driver";
 import { MissionSession } from "./session";
 import { createMission } from "../missions";
+import { resolveCredentials } from "../settings";
+
+/**
+ * The GitHub token as the operator actually configured it.
+ *
+ * `/setup` writes it to the settings table, so reading the environment alone
+ * finds nothing on a deployment configured through the wizard — which is why
+ * clones were anonymous and every agent reached the push with no credential.
+ */
+function githubToken(db: Db): string | undefined {
+  const config = getConfig();
+  return resolveCredentials(db, {
+    githubToken: config.githubToken,
+    asanaToken: config.asanaToken,
+  }).githubToken;
+}
 
 export interface LaunchInput {
   readonly title: string;
@@ -42,7 +67,7 @@ export async function launchMission(input: LaunchInput): Promise<string> {
   });
 
   try {
-    const cwd = (await prepareWorkspace(mission.id, input)) ?? config.workspaceRoot;
+    const cwd = (await prepareWorkspace(db, mission.id, input)) ?? config.workspaceRoot;
     // A missing cwd makes the spawn fail with ENOENT, which the Agent SDK
     // reports as the binary being unlaunchable — an error naming libc and the
     // dynamic loader, nowhere near the actual cause. Same reason db.ts creates
@@ -52,7 +77,7 @@ export async function launchMission(input: LaunchInput): Promise<string> {
     const session = new MissionSession(db, mission.id);
     sessions.set(mission.id, session);
 
-    session.start(createSdkDriver(), {
+    session.start(createSdkDriver(githubToken(db)), {
       missionId: mission.id,
       prompt: input.prompt,
       cwd,
@@ -64,6 +89,13 @@ export async function launchMission(input: LaunchInput): Promise<string> {
     // and handed out by getSession() for a mission that never ran.
     sessions.delete(mission.id);
     setStatus(db, mission.id, "failed");
+    // Without this the transcript is silent about why: the mission shows as
+    // failed and the only account of the reason went back in an HTTP response
+    // nobody kept.
+    appendEvent(db, mission.id, "mission.status", {
+      status: "failed",
+      error: error instanceof Error ? error.message : String(error),
+    });
     throw error;
   }
 
@@ -71,23 +103,77 @@ export async function launchMission(input: LaunchInput): Promise<string> {
 }
 
 async function prepareWorkspace(
+  db: Db,
   missionId: string,
   input: LaunchInput,
 ): Promise<string | undefined> {
   if (!input.repo) return undefined;
 
   const config = getConfig();
-  const env = { workspaceRoot: config.workspaceRoot, token: config.githubToken };
+  const env = { workspaceRoot: config.workspaceRoot, token: githubToken(db) };
 
   const bare = await ensureBareClone(env, input.repo);
   const base = input.base ?? (await defaultBranch(bare));
+  const branch = branchNameFor(input.title, missionId);
 
-  return createWorktree(env, {
+  const worktreePath = await createWorktree(env, {
     fullName: input.repo,
     missionId,
-    branch: branchNameFor(input.title, missionId),
+    branch,
+    // The remote-tracking ref, not the plain branch name: the clone's own
+    // refs/heads/* are whatever the remote held when it was first cloned and
+    // never move, which is how eleven commits of drift reached a pull request.
     base: `origin/${base}`,
   });
+
+  recordWorkspace(db, missionId, { branch, worktreePath });
+  return worktreePath;
+}
+
+/**
+ * Brings back missions whose session died with the process, and gives up on the
+ * rest with a reason.
+ *
+ * Called at startup, where the registry is empty by definition: anything the
+ * database still calls live is a leftover.
+ */
+export async function recoverMissions(): Promise<{ resumed: number; stopped: number }> {
+  const db = getDatabase();
+  const config = getConfig();
+  let resumed = 0;
+  let stopped = 0;
+
+  for (const plan of planRecovery(db)) {
+    const { mission } = plan;
+
+    if (plan.action === "stop") {
+      closeOpenPrompts(db, mission.id);
+      setStatus(db, mission.id, MISSION_STATUS.STOPPED);
+      appendEvent(db, mission.id, "mission.status", {
+        status: MISSION_STATUS.STOPPED,
+        error: `The session host restarted and this mission was not resumed: ${plan.reason}.`,
+      });
+      stopped += 1;
+      continue;
+    }
+
+    // The approval it was parked on died with the process, so it is closed and
+    // the agent asks again. Seeing the same request twice beats losing the work.
+    closeOpenPrompts(db, mission.id);
+    appendEvent(db, mission.id, "mission.resumed", { sessionId: mission.sessionId });
+
+    const session = new MissionSession(db, mission.id);
+    sessions.set(mission.id, session);
+    session.start(createSdkDriver(githubToken(db)), {
+      missionId: mission.id,
+      prompt: "Continue where you left off.",
+      cwd: mission.worktreePath || config.workspaceRoot,
+      resume: mission.sessionId ?? undefined,
+    });
+    resumed += 1;
+  }
+
+  return { resumed, stopped };
 }
 
 export async function stopMission(missionId: string): Promise<void> {

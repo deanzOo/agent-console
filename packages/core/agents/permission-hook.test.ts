@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { READ_ONLY_TOOLS, createPermissionHook } from "./permission-hook";
+import { createPermissionHook } from "./permission-hook";
+import { READ_ONLY_TOOLS, type Policy } from "./policy";
+
+const asking: Policy = { mode: "default", allowed: new Set() };
 
 const signal = new AbortController().signal;
 
@@ -27,7 +30,10 @@ describe("createPermissionHook", () => {
   // the SDK's own callback is not consulted for every tool.
   it("asks the operator about a tool that can change something", async () => {
     const ask = vi.fn(async () => ({ behavior: "allow" as const, updatedInput: {} }));
-    const result = await call(createPermissionHook(ask), "Bash");
+    const result = await call(
+      createPermissionHook(ask, () => asking),
+      "Bash",
+    );
 
     expect(ask).toHaveBeenCalledWith("Bash", { command: "ls" }, { signal });
     expect(result.hookSpecificOutput.permissionDecision).toBe("allow");
@@ -38,7 +44,10 @@ describe("createPermissionHook", () => {
       behavior: "deny" as const,
       message: "not this time",
     }));
-    const result = await call(createPermissionHook(ask), "Write");
+    const result = await call(
+      createPermissionHook(ask, () => asking),
+      "Write",
+    );
 
     expect(result.hookSpecificOutput.permissionDecision).toBe("deny");
     expect(result.hookSpecificOutput.permissionDecisionReason).toBe("not this time");
@@ -46,7 +55,10 @@ describe("createPermissionHook", () => {
 
   it.each(READ_ONLY_TOOLS)("allows %s without asking", async (tool) => {
     const ask = vi.fn();
-    const result = await call(createPermissionHook(ask), tool);
+    const result = await call(
+      createPermissionHook(ask, () => asking),
+      tool,
+    );
 
     expect(ask).not.toHaveBeenCalled();
     expect(result.hookSpecificOutput.permissionDecision).toBe("allow");
@@ -54,7 +66,10 @@ describe("createPermissionHook", () => {
 
   it("does not treat a tool merely prefixed with a safe name as safe", async () => {
     const ask = vi.fn(async () => ({ behavior: "allow" as const, updatedInput: {} }));
-    await call(createPermissionHook(ask), "ReadAndDelete");
+    await call(
+      createPermissionHook(ask, () => asking),
+      "ReadAndDelete",
+    );
 
     expect(ask).toHaveBeenCalled();
   });

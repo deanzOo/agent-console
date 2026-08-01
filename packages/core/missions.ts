@@ -1,5 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, gt, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  notInArray,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import type { Db } from "./db";
 import { titleContains } from "./issues";
 import {
@@ -72,19 +83,34 @@ export interface MissionFilter {
   readonly query?: string | undefined;
   /** Archived missions are excluded unless this asks for them instead. */
   readonly archived?: boolean | undefined;
+  /** Only missions still going: starting, running, or waiting on the operator. */
+  readonly active?: boolean | undefined;
+  /** Only missions that are over: done, failed or stopped. */
+  readonly finished?: boolean | undefined;
+}
+
+const LIVE_STATUSES = [
+  MISSION_STATUS.STARTING,
+  MISSION_STATUS.RUNNING,
+  MISSION_STATUS.AWAITING_INPUT,
+] as const;
+
+function conditionsFor(filter: MissionFilter): SQL[] {
+  const query = filter.query?.trim();
+  const conditions: SQL[] = [
+    filter.archived ? isNotNull(missions.archivedAt) : isNull(missions.archivedAt),
+  ];
+
+  if (filter.active) conditions.push(inArray(missions.status, [...LIVE_STATUSES]));
+  if (filter.finished) conditions.push(notInArray(missions.status, [...LIVE_STATUSES]));
+  if (filter.status) conditions.push(eq(missions.status, filter.status));
+  if (query) conditions.push(titleContains(missions.title, query));
+
+  return conditions;
 }
 
 export function listMissions(db: Db, filter: MissionFilter = {}): Mission[] {
-  const query = filter.query?.trim();
-  const conditions: SQL[] = [];
-
-  conditions.push(
-    filter.archived ? isNotNull(missions.archivedAt) : isNull(missions.archivedAt),
-  );
-  if (filter.status) conditions.push(eq(missions.status, filter.status));
-  if (query) {
-    conditions.push(titleContains(missions.title, query));
-  }
+  const conditions = conditionsFor(filter);
 
   // rowid breaks ties: two missions created in the same millisecond share a
   // createdAt, and ordering by a random uuid would shuffle them.
@@ -94,6 +120,16 @@ export function listMissions(db: Db, filter: MissionFilter = {}): Mission[] {
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(missions.createdAt), desc(sql`rowid`))
     .all();
+}
+
+/** How many missions match, without loading them: the nav wants a number. */
+export function countMissions(db: Db, filter: MissionFilter = {}): number {
+  const row = db
+    .select({ count: sql<number>`count(*)` })
+    .from(missions)
+    .where(and(...conditionsFor(filter)))
+    .get();
+  return row?.count ?? 0;
 }
 
 export function countAwaitingInput(db: Db): number {
@@ -127,6 +163,19 @@ export function restoreMission(db: Db, id: string): void {
 export function setStatus(db: Db, id: string, status: MissionStatus): void {
   db.update(missions)
     .set({ status, updatedAt: new Date().toISOString() })
+    .where(eq(missions.id, id))
+    .run();
+}
+
+export interface WorkspaceRecord {
+  readonly branch: string;
+  readonly worktreePath: string;
+}
+
+/** The row exists before the worktree does, so the pair is written back here. */
+export function recordWorkspace(db: Db, id: string, input: WorkspaceRecord): void {
+  db.update(missions)
+    .set({ branch: input.branch, worktreePath: input.worktreePath })
     .where(eq(missions.id, id))
     .run();
 }

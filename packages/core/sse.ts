@@ -1,5 +1,15 @@
 import type { StoredEvent } from "./missions";
 
+/** Written on an idle stream so a proxy does not close it as dead. */
+export const HEARTBEAT_MS = 25_000;
+
+export const SSE_HEADERS = {
+  "content-type": "text/event-stream; charset=utf-8",
+  "cache-control": "no-cache, no-transform",
+  connection: "keep-alive",
+  "x-accel-buffering": "no",
+};
+
 export function parseSince(raw: string | null): number {
   const parsed = Number.parseInt(raw ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;

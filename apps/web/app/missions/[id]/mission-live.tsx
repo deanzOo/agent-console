@@ -1,6 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { groupTranscript, toTranscript } from "@agent-console/core/transcript";
+import { Composer } from "./composer";
+import { MissionActions } from "./mission-actions";
+import { PublishButton } from "./publish-button";
+import { TranscriptRow } from "./transcript-row";
+
+// Close enough to the end that the reader is following along rather than
+// reading back through what already happened.
+const FOLLOW_THRESHOLD_PX = 120;
+
+const LIVE_STATUSES = ["starting", "running", "awaiting_input"];
 import type { OpenPrompt, StoredEvent } from "@agent-console/core/missions";
 import { PROMPT_KIND } from "@agent-console/core/schema";
 
@@ -10,6 +21,7 @@ interface MissionView {
   readonly status: string;
   readonly repo: string | null;
   readonly branch: string | null;
+  readonly worktreePath: string | null;
 }
 
 export function MissionLive({
@@ -75,16 +87,22 @@ export function MissionLive({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mission.id]);
 
+  // Follow the tail only when the reader is already there. Scrolling them back
+  // down after every message makes reading anything above impossible, and each
+  // approval produces several.
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: "smooth" });
+    const nearBottom =
+      window.innerHeight + window.scrollY >=
+      document.body.scrollHeight - FOLLOW_THRESHOLD_PX;
+    if (nearBottom) bottom.current?.scrollIntoView({ behavior: "smooth" });
   }, [events.length]);
 
-  async function answer(promptId: string, decision: "allow" | "deny") {
+  async function answer(promptId: string, decision: "allow" | "deny", always = false) {
     setPrompts((current) => current.filter((prompt) => prompt.id !== promptId));
     await fetch(`/api/missions/${mission.id}/answer`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ promptId, decision }),
+      body: JSON.stringify({ promptId, decision, always }),
     });
   }
 
@@ -97,12 +115,30 @@ export function MissionLive({
           {mission.repo ? ` · ${mission.repo}` : ""}
           {mission.branch ? ` · ${mission.branch}` : ""}
         </p>
+        <div className="mt-2">
+          <MissionActions
+            missionId={mission.id}
+            status={status}
+            hasWorktree={Boolean(mission.worktreePath)}
+          />
+        </div>
       </header>
 
+      <ol className="space-y-3">
+        {groupTranscript(toTranscript(events)).map((row) => (
+          <TranscriptRow key={row.item.seq} row={row} />
+        ))}
+      </ol>
+      <div ref={bottom} />
+
+      {/* Pinned to the bottom of the viewport: an approval that only exists at
+          the top of a long transcript has to be hunted for, and answering one
+          appends more output that moves it further away. */}
       {prompts.map((prompt) => (
         <section
           key={prompt.id}
-          className="rounded border border-amber-400 bg-amber-50 p-3 dark:bg-amber-950/40"
+          className="sticky bottom-0 z-10 rounded border border-amber-400 bg-amber-50 p-3 shadow-lg dark:bg-amber-950 dark:shadow-black/40"
+          style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
         >
           <p className="text-sm font-medium">
             Waiting on you: {prompt.toolName ?? "a question"}
@@ -117,6 +153,17 @@ export function MissionLive({
             >
               Allow
             </button>
+            {/* One approval per tool instead of one per call: an agent editing
+                files asks dozens of times, and answering each is the thing that
+                made the console unusable. */}
+            {prompt.toolName && (
+              <button
+                onClick={() => answer(prompt.id, "allow", true)}
+                className="rounded border border-neutral-400 px-3 py-2 text-sm"
+              >
+                Always allow {prompt.toolName}
+              </button>
+            )}
             <button
               onClick={() => answer(prompt.id, "deny")}
               className="rounded border border-neutral-400 px-3 py-2 text-sm"
@@ -127,20 +174,14 @@ export function MissionLive({
         </section>
       ))}
 
-      <ol className="space-y-2">
-        {events.map((event) => (
-          <li
-            key={event.seq}
-            className="rounded border border-neutral-200 p-2 text-xs dark:border-neutral-800"
-          >
-            <span className="text-neutral-500">{event.type}</span>
-            <pre className="mt-1 overflow-x-auto break-words whitespace-pre-wrap">
-              {JSON.stringify(event.payload, null, 2)}
-            </pre>
-          </li>
-        ))}
-      </ol>
-      <div ref={bottom} />
+      {/* A finished mission still holds its session, so it can still be told
+          to do one more thing — and a mission whose branch never reached the
+          remote has nowhere else to go. */}
+      {mission.branch && !LIVE_STATUSES.includes(status) && (
+        <PublishButton missionId={mission.id} />
+      )}
+
+      <Composer missionId={mission.id} live={status !== "failed"} />
     </main>
   );
 }

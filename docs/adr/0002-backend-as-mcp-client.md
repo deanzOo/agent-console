@@ -1,6 +1,7 @@
 # 2. The backend is an MCP client, with no model in the dashboard path
 
-- Status: accepted
+- Status: accepted for agents; the dashboard's own reads are superseded by
+  [ADR-0007](0007-plain-rest-for-issue-and-task-sync.md)
 - Date: 2026-07-30
 
 ## Context and problem statement

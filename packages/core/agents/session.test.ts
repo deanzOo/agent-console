@@ -30,6 +30,8 @@ function fakeDriver() {
   let failure: Error | undefined;
   let canUseTool: CanUseTool | undefined;
   let interrupted = false;
+  const said: string[] = [];
+  const modes: string[] = [];
 
   const run: AgentRun = {
     messages: {
@@ -46,6 +48,12 @@ function fakeDriver() {
           });
         }
       },
+    },
+    say: (text: string) => {
+      said.push(text);
+    },
+    setMode: async (mode: string) => {
+      modes.push(mode);
     },
     interrupt: async () => {
       interrupted = true;
@@ -81,6 +89,8 @@ function fakeDriver() {
       failure = error;
       wake();
     },
+    said,
+    modes,
     requestTool(name: string, input: Record<string, unknown> = {}) {
       if (!canUseTool) throw new Error("session not started");
       return canUseTool(name, input, { signal: new AbortController().signal });
@@ -94,6 +104,10 @@ function fakeDriver() {
 function textMessage(text: string): SDKMessage {
   // The SDK's union is wider than this test needs; only `type` is read.
   return JSON.parse(JSON.stringify({ type: "assistant", text }));
+}
+
+function resultMessage(): SDKMessage {
+  return JSON.parse(JSON.stringify({ type: "result", subtype: "success" }));
 }
 
 async function settle() {
@@ -273,5 +287,117 @@ describe("MissionSession", () => {
       await session.stop();
       await expect(decision).resolves.toMatchObject({ behavior: "deny" });
     });
+  });
+});
+
+describe("speaking to a running session", () => {
+  it("delivers the operator's words to the agent", async () => {
+    const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
+    const fake = fakeDriver();
+    const session = new MissionSession(db, mission.id);
+    session.start(fake.driver, { missionId: mission.id, prompt: "go", cwd: "/tmp" });
+
+    expect(session.say("actually, use the other file")).toBe(true);
+    expect(fake.said).toEqual(["actually, use the other file"]);
+
+    fake.finish();
+    await session.stop();
+  });
+
+  // Without this the transcript shows the agent changing course for no reason.
+  it("records what was said in the transcript", async () => {
+    const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
+    const fake = fakeDriver();
+    const session = new MissionSession(db, mission.id);
+    session.start(fake.driver, { missionId: mission.id, prompt: "go", cwd: "/tmp" });
+
+    session.say("hello");
+
+    const events = listEvents(db, mission.id, 0);
+    expect(events.some((e) => e.type === "mission.said")).toBe(true);
+
+    fake.finish();
+    await session.stop();
+  });
+
+  it("refuses to speak to a session that never started", () => {
+    const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
+    expect(new MissionSession(db, mission.id).say("hello")).toBe(false);
+  });
+});
+
+describe("changing permission mode", () => {
+  it("passes the new mode to the run", async () => {
+    const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
+    const fake = fakeDriver();
+    const session = new MissionSession(db, mission.id);
+    session.start(fake.driver, { missionId: mission.id, prompt: "go", cwd: "/tmp" });
+
+    expect(await session.setMode("plan")).toBe(true);
+    expect(fake.modes).toEqual(["plan"]);
+
+    fake.finish();
+    await session.stop();
+  });
+
+  // A transcript where approvals simply stop appearing is worse than one that
+  // says the posture changed and to what.
+  it("records the change", async () => {
+    const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
+    const fake = fakeDriver();
+    const session = new MissionSession(db, mission.id);
+    session.start(fake.driver, { missionId: mission.id, prompt: "go", cwd: "/tmp" });
+
+    await session.setMode("acceptEdits");
+
+    const events = listEvents(db, mission.id, 0);
+    expect(JSON.stringify(events)).toContain("acceptEdits");
+
+    fake.finish();
+    await session.stop();
+  });
+
+  it("refuses on a session that never started", async () => {
+    const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
+    expect(await new MissionSession(db, mission.id).setMode("plan")).toBe(false);
+  });
+});
+
+// Streaming input keeps the session open so the operator can reply, which means
+// the message stream does not end when the agent stops working. Without this the
+// mission reads as running forever, having plainly said it was finished.
+describe("finishing a turn", () => {
+  it("marks the mission done when the agent stops working", async () => {
+    const fake = fakeDriver();
+    const { mission } = start(fake);
+
+    fake.emit(resultMessage());
+    await settle();
+
+    expect(getMission(db, mission.id)?.status).toBe("done");
+  });
+
+  it("puts it back to running when the operator replies", async () => {
+    const fake = fakeDriver();
+    const { mission, session } = start(fake);
+    fake.emit(resultMessage());
+    await settle();
+    expect(getMission(db, mission.id)?.status).toBe("done");
+
+    session.say("one more thing");
+
+    expect(getMission(db, mission.id)?.status).toBe("running");
+  });
+
+  // The session is still live and still resumable, so it must stay in the
+  // registry: the operator can reply to a finished mission and carry on.
+  it("leaves the session able to take a reply", async () => {
+    const fake = fakeDriver();
+    const { session } = start(fake);
+    fake.emit(resultMessage());
+    await settle();
+
+    expect(session.say("carry on")).toBe(true);
+    expect(fake.said).toContain("carry on");
   });
 });
