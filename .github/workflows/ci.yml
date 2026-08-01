@@ -21,15 +21,17 @@ jobs:
   # The check list lives in ci/checks.json so `npm run ci` and this matrix
   # cannot drift apart. Adding a check there adds it in both places.
   manifest:
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     outputs:
       checks: ${{ steps.read.outputs.checks }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - id: read
         run: echo "checks=$(jq -c '[.[] | {id, name, command, requires}]' ci/checks.json)" >> "$GITHUB_OUTPUT"
 
   check:
+    timeout-minutes: 15
     needs: manifest
     runs-on: ubuntu-latest
     strategy:
@@ -40,7 +42,7 @@ jobs:
     env:
       HUSKY: 0
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # Only the secret history scan reads past the tip; every other check
           # works on the tree it is given.
@@ -48,7 +50,7 @@ jobs:
           # `&& 0 || 1` yields 1 in both branches and the clone stays shallow —
           # which is how a history scan came to scan one commit.
           fetch-depth: ${{ matrix.check.requires == 'gitleaks' && '0' || '1' }}
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
           cache: npm
@@ -56,7 +58,7 @@ jobs:
 
       - name: Install trivy
         if: matrix.check.requires == 'trivy'
-        uses: aquasecurity/setup-trivy@v0.3.1
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
 
       # Downloaded to a file and extracted rather than piped into a shell, and
       # pinned so a compromised latest release cannot walk in on its own.
@@ -76,15 +78,16 @@ jobs:
 
   # Needs the pull request's commit range, which does not exist locally.
   commits:
+    timeout-minutes: 10
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     env:
       HUSKY: 0
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
           cache: npm
@@ -96,12 +99,29 @@ jobs:
           git log --format=%B origin/${{ github.base_ref }}..HEAD > /tmp/commits.txt
           bash scripts/check-commit-trailers.sh /tmp/commits.txt
 
+  # `npm audit` reports on what is already in the lockfile. This objects while
+  # the dependency is still a proposal, which is the only point at which not
+  # taking it is free.
+  dependencies:
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
+        with:
+          fail-on-severity: high
+          # Copyleft licences would change what a peer cloning this is allowed
+          # to do with it, which is a decision rather than an oversight.
+          deny-licenses: AGPL-3.0, GPL-3.0, LGPL-3.0
+
   # Green only when every matrix leg is. This is the single required status
   # check to select in branch protection — a new check in the manifest is then
   # covered automatically instead of needing the setting updated.
   ci:
+    timeout-minutes: 10
     if: always()
-    needs: [check, commits]
+    needs: [check, commits, dependencies]
     runs-on: ubuntu-latest
     steps:
       - name: Verify all checks passed
