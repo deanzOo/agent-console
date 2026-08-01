@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { toTranscript } from "@agent-console/core/transcript";
+import { groupTranscript, toTranscript } from "@agent-console/core/transcript";
 import { Composer } from "./composer";
 import { MissionActions } from "./mission-actions";
 import { TranscriptRow } from "./transcript-row";
@@ -122,8 +122,11 @@ export function MissionLive({
       </header>
 
       <ol className="space-y-3">
-        {toTranscript(events).map((item) => (
-          <TranscriptRow key={item.seq} item={item} />
+        {groupTranscript(toTranscript(events)).map((group) => (
+          <TranscriptRow
+            key={group.kind === "collapsed" ? group.items[0]?.seq : group.item.seq}
+            group={group}
+          />
         ))}
       </ol>
       <div ref={bottom} />

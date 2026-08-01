@@ -8,7 +8,13 @@ export const metadata: Metadata = {
   // iOS ignores the manifest for both of these: without them an installed app
   // gets a screenshot for an icon and a browser chrome it cannot escape.
   appleWebApp: { capable: true, title: "Agents", statusBarStyle: "black-translucent" },
-  icons: { apple: "/icons/apple-touch-icon.png" },
+  icons: {
+    icon: [
+      { url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: "/icons/apple-touch-icon.png",
+  },
 };
 
 // Nothing here is static: every page reads SQLite and live session state, and

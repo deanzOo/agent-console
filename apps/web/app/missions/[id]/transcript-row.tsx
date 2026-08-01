@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { TranscriptItem } from "@agent-console/core/transcript";
+import type { TranscriptGroup, TranscriptItem } from "@agent-console/core/transcript";
 
 // Long tool output pushes everything else off a phone screen, so it is clipped
 // until asked for. The number is lines, not characters: a wide line is one line.
@@ -35,24 +35,115 @@ function Body({ text, mono }: { text: string; mono?: boolean }) {
   );
 }
 
-export function TranscriptRow({ item }: { item: TranscriptItem }) {
-  const [raw, setRaw] = useState(false);
-  const { entry } = item;
+function Raw({ value }: { value: unknown }) {
+  const [open, setOpen] = useState(false);
 
-  // Hidden events stay reachable — a session's capability list is worth seeing
-  // when something is behaving oddly, just not inline in a conversation.
-  if (entry.kind === "hidden" && !raw) {
-    return (
-      <li className="text-[11px] text-neutral-400">
-        <button type="button" onClick={() => setRaw(true)} className="underline">
-          {item.type}
+  return (
+    <>
+      {/* Beside the content, not under it: a row per toggle is a row to scroll
+          past, and there is one on every entry. */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="float-right ml-2 text-[11px] text-neutral-400 underline"
+        aria-label="Show the raw event"
+      >
+        {open ? "hide" : "raw"}
+      </button>
+      {open && (
+        <pre className="clear-both mt-1 overflow-x-auto rounded bg-black/5 p-2 text-[11px] break-words whitespace-pre-wrap dark:bg-white/5">
+          {JSON.stringify(value, null, 2)}
+        </pre>
+      )}
+    </>
+  );
+}
+
+/** A run of hidden events as one line: "agent.system (164)", still openable. */
+function Collapsed({ label, items }: { label: string; items: TranscriptItem[] }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <li className="text-[11px] text-neutral-400">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="underline">
+        {label}
+        {items.length > 1 ? ` (${items.length})` : ""}
+      </button>
+      {open && (
+        <pre className="mt-1 max-h-64 overflow-auto rounded bg-black/5 p-2 break-words whitespace-pre-wrap dark:bg-white/5">
+          {items.map((item) => JSON.stringify(item.raw, null, 2)).join("\n\n")}
+        </pre>
+      )}
+    </li>
+  );
+}
+
+// Lines shown before the diff is clipped. A large edit is common and pushes
+// the conversation off a phone screen otherwise.
+const CLIPPED_DIFF_LINES = 16;
+
+function Edit({
+  entry,
+}: {
+  entry: { path: string; removed: string[]; added: string[] };
+}) {
+  const [open, setOpen] = useState(false);
+  const lines = [
+    ...entry.removed.map((text) => ({ sign: "-", text })),
+    ...entry.added.map((text) => ({ sign: "+", text })),
+  ];
+  const long = lines.length > CLIPPED_DIFF_LINES;
+  const shown = open || !long ? lines : lines.slice(0, CLIPPED_DIFF_LINES);
+
+  return (
+    <div>
+      <p className="mb-1 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+        <span className="font-mono break-all">{entry.path}</span>
+        <span>
+          <span className="text-green-700 dark:text-green-400">
+            +{entry.added.length}
+          </span>{" "}
+          <span className="text-red-700 dark:text-red-400">
+            −{entry.removed.length}
+          </span>
+        </span>
+      </p>
+      <pre className="overflow-x-auto rounded bg-neutral-50 p-2 font-mono text-xs dark:bg-neutral-900">
+        {shown.map((line, index) => (
+          <div
+            key={index}
+            className={
+              line.sign === "+"
+                ? "bg-green-100 text-green-900 dark:bg-green-950/60 dark:text-green-200"
+                : "bg-red-100 text-red-900 dark:bg-red-950/60 dark:text-red-200"
+            }
+          >
+            <span className="break-words whitespace-pre-wrap">
+              {line.sign} {line.text}
+            </span>
+          </div>
+        ))}
+      </pre>
+      {long && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="mt-1 text-xs text-neutral-500 underline"
+        >
+          {open ? "Show less" : `Show all ${lines.length} lines`}
         </button>
-      </li>
-    );
-  }
+      )}
+    </div>
+  );
+}
+
+function Entry({ item }: { item: TranscriptItem }) {
+  const { entry } = item;
 
   return (
     <li className="text-sm">
+      <Raw value={item.raw} />
+
       {entry.kind === "said" && (
         <div
           className={
@@ -82,6 +173,8 @@ export function TranscriptRow({ item }: { item: TranscriptItem }) {
           </pre>
         </div>
       )}
+
+      {entry.kind === "edit" && <Edit entry={entry} />}
 
       {entry.kind === "output" && (
         <div
@@ -115,19 +208,14 @@ export function TranscriptRow({ item }: { item: TranscriptItem }) {
       {entry.kind === "note" && (
         <p className="text-[11px] text-neutral-400">{entry.text}</p>
       )}
-
-      <button
-        type="button"
-        onClick={() => setRaw((v) => !v)}
-        className="mt-1 text-[11px] text-neutral-400 underline"
-      >
-        {raw ? "hide raw" : "raw"}
-      </button>
-      {raw && (
-        <pre className="mt-1 overflow-x-auto rounded bg-black/5 p-2 text-[11px] break-words whitespace-pre-wrap dark:bg-white/5">
-          {JSON.stringify(item.raw, null, 2)}
-        </pre>
-      )}
     </li>
+  );
+}
+
+export function TranscriptRow({ group }: { group: TranscriptGroup }) {
+  return group.kind === "collapsed" ? (
+    <Collapsed label={group.label} items={group.items} />
+  ) : (
+    <Entry item={group.item} />
   );
 }

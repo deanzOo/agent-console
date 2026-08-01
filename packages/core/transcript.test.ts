@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarise, toTranscript } from "./transcript";
+import { groupTranscript, summarise, toTranscript } from "./transcript";
 
 function event(type: string, payload: unknown) {
   return { seq: 1, ts: "2026-07-31T00:00:00.000Z", type, payload };
@@ -180,5 +180,113 @@ describe("toTranscript", () => {
     ]);
     expect(item).toMatchObject({ seq: 4, type: "agent.assistant" });
     expect(item?.raw).toEqual({ thinking: "hm" });
+  });
+});
+
+describe("groupTranscript", () => {
+  function item(seq: number, type: string, payload: unknown) {
+    return toTranscript([{ seq, ts: "t", type, payload }])[0]!;
+  }
+
+  const said = (seq: number) =>
+    item(seq, "agent.assistant", {
+      message: { content: [{ type: "text", text: "hi" }] },
+    });
+  const system = (seq: number) => item(seq, "agent.system", { subtype: "init" });
+
+  it("leaves visible entries alone", () => {
+    const groups = groupTranscript([said(1), said(2)]);
+    expect(groups.map((g) => g.kind)).toEqual(["entry", "entry"]);
+  });
+
+  // 164 one-line placeholders is still 164 rows to scroll past.
+  it("folds a run of hidden events into one line with a count", () => {
+    const groups = groupTranscript([system(1), system(2), system(3)]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ kind: "collapsed", label: "agent.system" });
+    expect(groups[0]?.kind === "collapsed" && groups[0].items).toHaveLength(3);
+  });
+
+  it("does not fold across a visible entry", () => {
+    const groups = groupTranscript([system(1), said(2), system(3)]);
+    expect(groups.map((g) => g.kind)).toEqual(["collapsed", "entry", "collapsed"]);
+  });
+
+  // "agent.system (3)" says something; "hidden (3)" of three different kinds
+  // says nothing.
+  it("only folds runs of the same type", () => {
+    const rate = item(9, "agent.rate_limit_event", {});
+    const groups = groupTranscript([system(1), rate, system(3)]);
+    expect(groups).toHaveLength(3);
+  });
+
+  it("keeps every underlying item, so nothing is lost", () => {
+    const groups = groupTranscript([system(1), system(2)]);
+    const kept = groups.flatMap((g) => (g.kind === "collapsed" ? g.items : [g.item]));
+    expect(kept.map((i) => i.seq)).toEqual([1, 2]);
+  });
+});
+
+describe("edits", () => {
+  function edit(name: string, input: unknown) {
+    return summarise(
+      event("agent.assistant", {
+        message: { content: [{ type: "tool_use", name, input }] },
+      }),
+    );
+  }
+
+  it("reads an Edit as the lines that go and the lines that arrive", () => {
+    expect(
+      edit("Edit", {
+        file_path: "/app/x.ts",
+        old_string: "const a = 1;\nconst b = 2;",
+        new_string: "const a = 1;\nconst b = 3;\nconst c = 4;",
+      }),
+    ).toEqual({
+      kind: "edit",
+      path: "/app/x.ts",
+      removed: ["const a = 1;", "const b = 2;"],
+      added: ["const a = 1;", "const b = 3;", "const c = 4;"],
+    });
+  });
+
+  // An empty string is no lines, not one blank one, or every insertion reports
+  // a removal it did not make.
+  it("counts an insertion as adding only", () => {
+    const result = edit("Edit", { file_path: "/a", old_string: "", new_string: "new" });
+    expect(result).toMatchObject({ removed: [], added: ["new"] });
+  });
+
+  it("treats a Write as all additions, since it replaces the file", () => {
+    expect(edit("Write", { file_path: "/a", content: "one\ntwo" })).toMatchObject({
+      removed: [],
+      added: ["one", "two"],
+    });
+  });
+
+  it("sums every hunk of a MultiEdit", () => {
+    expect(
+      edit("MultiEdit", {
+        file_path: "/a",
+        edits: [
+          { old_string: "x", new_string: "y" },
+          { old_string: "p\nq", new_string: "r" },
+        ],
+      }),
+    ).toMatchObject({ removed: ["x", "p", "q"], added: ["y", "r"] });
+  });
+
+  it("falls back to a plain tool line when there is nothing to diff", () => {
+    expect(edit("Edit", { file_path: "/a" }).kind).toBe("tool");
+  });
+
+  it("leaves other tools alone", () => {
+    expect(edit("Bash", { command: "ls" })).toEqual({
+      kind: "tool",
+      name: "Bash",
+      summary: "ls",
+    });
   });
 });

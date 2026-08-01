@@ -112,6 +112,9 @@ const icons = [
   { file: "maskable-512.png", size: 512, inset: true, rounded: false },
   // iOS applies its own corner radius and does not support transparency.
   { file: "apple-touch-icon.png", size: 180, inset: false, rounded: true },
+  // The browser tab. Drawn at the same scale as the rest rather than resized
+  // from a large one, so the strokes land on whole pixels.
+  { file: "favicon-32.png", size: 32, inset: false, rounded: false },
 ];
 
 for (const icon of icons) {
