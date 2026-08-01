@@ -1,0 +1,12 @@
+# Every pull request requests a review from the maintainer automatically.
+# Reviews are not required to merge — a sole maintainer cannot approve their own
+# pull request, and requiring one would lock the repository against its owner.
+# This is about routing, not a gate.
+*       @deanzOo
+
+# Changing any of these changes what everyone else's merges have to satisfy, so
+# they are worth landing on someone's radar deliberately.
+/ci/                    @deanzOo
+/.github/workflows/     @deanzOo
+/CLAUDE.md              @deanzOo
+/SECURITY.md            @deanzOo
