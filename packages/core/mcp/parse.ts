@@ -82,7 +82,9 @@ const taskSchema = z.object({
   projects: z.array(z.object({ name: z.string() }).loose()).optional(),
 });
 
-export function parseAsanaTasks(payload: unknown): CachedAsanaTask[] {
+export function parseAsanaTasks(
+  payload: unknown,
+): Omit<CachedAsanaTask, "workspaceGid" | "workspaceName">[] {
   return asArray(payload, "data", "tasks")
     .map((entry) => taskSchema.safeParse(entry))
     .filter((parsed) => parsed.success)

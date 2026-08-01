@@ -6,6 +6,7 @@ import { asanaCache } from "./schema";
 export type CachedTask = typeof asanaCache.$inferSelect;
 
 export interface TaskFilter {
+  readonly workspace?: string | undefined;
   readonly project?: string | undefined;
   readonly query?: string | undefined;
   /** Completed tasks are excluded unless this asks for them instead. */
@@ -23,6 +24,8 @@ export const UNFILED = "(no project)";
 function conditionsFor(filter: TaskFilter): SQL[] {
   const query = filter.query?.trim();
   const conditions: SQL[] = [eq(asanaCache.completed, filter.completed ?? false)];
+
+  if (filter.workspace) conditions.push(eq(asanaCache.workspaceGid, filter.workspace));
 
   if (filter.project === UNFILED) conditions.push(isNull(asanaCache.project));
   else if (filter.project) conditions.push(eq(asanaCache.project, filter.project));
@@ -58,6 +61,25 @@ export function listTaskPage(db: Db, filter: TaskFilter): TaskPage {
     .all();
 
   return { tasks, total: counted?.total ?? 0 };
+}
+
+export interface TaskWorkspace {
+  readonly gid: string;
+  readonly name: string;
+}
+
+export function listTaskWorkspaces(db: Db): TaskWorkspace[] {
+  return (
+    db
+      .selectDistinct({ gid: asanaCache.workspaceGid, name: asanaCache.workspaceName })
+      .from(asanaCache)
+      .where(eq(asanaCache.completed, false))
+      .all()
+      .filter((row): row is { gid: string; name: string | null } => row.gid !== null)
+      // A workspace whose name never arrived is still one you can filter by.
+      .map((row) => ({ gid: row.gid, name: row.name ?? row.gid }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  );
 }
 
 export function listTaskProjects(db: Db): string[] {
