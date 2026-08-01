@@ -58,6 +58,16 @@ Absent credentials hide the feature rather than breaking it.
 | `VAPID_SUBJECT`                          | Web push                           | Contact address for push services.                              |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Telegram alerts                    | Both required — a token with no chat id has nowhere to deliver. |
 
+### The GitHub token reaches the agent
+
+Agents are given `GITHUB_TOKEN` in their own environment, so `git` and `gh` can authenticate and a mission can
+open its own pull request. An agent has a shell, so **anything it runs can read that token** — scope the PAT
+to the repositories you are willing to have an agent write to. The reasoning, and the option that was rejected,
+are in [ADR 0008](../adr/0008-agent-holds-the-git-token.md).
+
+Without it, the issues panel is hidden and missions still run — they just cannot reach GitHub, and their work
+stays on the server until you push it from the console.
+
 ## Settings-table only
 
 Set from `/setup` or `/settings`; no environment equivalent.
