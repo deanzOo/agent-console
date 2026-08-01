@@ -40,7 +40,9 @@ export function createSdkDriver(): AgentDriver {
           // before either is consulted, so a tool it is willing to run never
           // reaches them. The hook is asked about every call.
           hooks: {
-            PreToolUse: [{ hooks: [createPermissionHook(options.canUseTool)] }],
+            PreToolUse: [
+              { hooks: [createPermissionHook(options.canUseTool, options.policy)] },
+            ],
           },
           ...(claudeCliPath === undefined
             ? {}

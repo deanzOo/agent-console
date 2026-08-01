@@ -24,6 +24,7 @@ function start(claudeCliPath: string | undefined) {
     prompt: "hi",
     cwd: "/tmp/wt",
     canUseTool: async () => ({ behavior: "allow", updatedInput: {} }),
+    policy: () => ({ mode: "default" as const, allowed: new Set<string>() }),
   });
   return queryMock.mock.calls.at(-1)?.[0].options;
 }
@@ -61,6 +62,7 @@ describe("createSdkDriver", () => {
       prompt: "hi",
       cwd: "/tmp/wt",
       canUseTool: async () => ({ behavior: "allow", updatedInput: {} }),
+      policy: () => ({ mode: "default" as const, allowed: new Set<string>() }),
     });
     const handle = queryMock.mock.results.at(-1)?.value;
 

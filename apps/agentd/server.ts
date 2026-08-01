@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { z } from "zod";
 import { getConfig } from "@agent-console/core/env";
 import { getDatabase } from "@agent-console/core/db";
-import { getMission, listEvents } from "@agent-console/core/missions";
+import { getMission, listEvents, openPrompts } from "@agent-console/core/missions";
 import {
   getSession,
   launchMission,
@@ -240,6 +240,15 @@ async function handle(
     json(response, 400, { error: "invalid_request", issues: parsed.error.issues });
     return;
   }
+  // Remembered before the answer, so the tool the operator just approved is
+  // already allowed if the agent asks for it again immediately.
+  if (parsed.data.decision === "allow" && parsed.data.always) {
+    const prompt = openPrompts(getDatabase(), route.id).find(
+      (open) => open.id === parsed.data.promptId,
+    );
+    if (prompt?.toolName) session.alwaysAllow(prompt.toolName);
+  }
+
   const handled = session.answer(
     parsed.data.promptId,
     parsed.data.decision === "allow"

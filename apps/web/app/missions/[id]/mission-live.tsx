@@ -94,12 +94,12 @@ export function MissionLive({
     if (nearBottom) bottom.current?.scrollIntoView({ behavior: "smooth" });
   }, [events.length]);
 
-  async function answer(promptId: string, decision: "allow" | "deny") {
+  async function answer(promptId: string, decision: "allow" | "deny", always = false) {
     setPrompts((current) => current.filter((prompt) => prompt.id !== promptId));
     await fetch(`/api/missions/${mission.id}/answer`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ promptId, decision }),
+      body: JSON.stringify({ promptId, decision, always }),
     });
   }
 
@@ -150,6 +150,17 @@ export function MissionLive({
             >
               Allow
             </button>
+            {/* One approval per tool instead of one per call: an agent editing
+                files asks dozens of times, and answering each is the thing that
+                made the console unusable. */}
+            {prompt.toolName && (
+              <button
+                onClick={() => answer(prompt.id, "allow", true)}
+                className="rounded border border-neutral-400 px-3 py-2 text-sm"
+              >
+                Always allow {prompt.toolName}
+              </button>
+            )}
             <button
               onClick={() => answer(prompt.id, "deny")}
               className="rounded border border-neutral-400 px-3 py-2 text-sm"

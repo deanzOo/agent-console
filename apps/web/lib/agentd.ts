@@ -24,7 +24,11 @@ export interface LaunchInput {
 }
 
 export type Answer =
-  | { readonly promptId: string; readonly decision: "allow" }
+  | {
+      readonly promptId: string;
+      readonly decision: "allow";
+      readonly always?: boolean | undefined;
+    }
   | { readonly promptId: string; readonly decision: "deny"; readonly message: string };
 
 function baseUrl(): string {
