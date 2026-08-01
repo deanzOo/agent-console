@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDatabase } from "@agent-console/core/db";
-import { countAwaitingInput, listMissions } from "@agent-console/core/missions";
+import {
+  countAwaitingInput,
+  countMissions,
+  listMissions,
+} from "@agent-console/core/missions";
 import { MISSION_STATUSES } from "@agent-console/core/schema";
 import { isSetupComplete } from "@agent-console/core/settings";
 import { ArchiveButton } from "./archive-button";
 import { FilterBar } from "./filter-bar";
+import { MissionTabs } from "./mission-tabs";
 import { NewMissionForm } from "./new-mission-form";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +35,7 @@ export default async function Dashboard({
 }) {
   const { q, status, view } = await searchParams;
   const archived = view === "archived";
+  const finished = view === "finished";
   const db = getDatabase();
   // First run lands on the wizard. Every other page is reached from here, so
   // one check covers the app without risking a redirect loop on /setup itself.
@@ -37,9 +43,24 @@ export default async function Dashboard({
 
   const missions = listMissions(db, {
     query: q,
-    status: asStatus(status),
+    status: finished ? undefined : asStatus(status),
     archived,
+    finished,
   });
+
+  const tabs = [
+    { value: "", label: "Active", count: countMissions(db, { active: true }) },
+    {
+      value: "finished",
+      label: "Finished",
+      count: countMissions(db, { finished: true }),
+    },
+    {
+      value: "archived",
+      label: "Archived",
+      count: countMissions(db, { archived: true }),
+    },
+  ];
   const waiting = countAwaitingInput(db);
 
   return (
@@ -55,6 +76,8 @@ export default async function Dashboard({
 
       <NewMissionForm />
 
+      <MissionTabs tabs={tabs} />
+
       <FilterBar
         placeholder="Search missions"
         selectors={[
@@ -66,21 +89,18 @@ export default async function Dashboard({
               label: value.replace("_", " "),
             })),
           },
-          {
-            name: "view",
-            label: "Active",
-            choices: [{ value: "archived", label: "Archived" }],
-          },
         ]}
       />
 
       {missions.length === 0 ? (
         <p className="text-sm text-neutral-500">
-          {archived
-            ? "Nothing archived."
-            : q || status
-              ? "No mission matches that filter."
-              : "No missions yet."}
+          {q || status
+            ? "No mission matches that filter."
+            : archived
+              ? "Nothing archived."
+              : finished
+                ? "Nothing finished yet."
+                : "No missions running."}
         </p>
       ) : (
         <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">

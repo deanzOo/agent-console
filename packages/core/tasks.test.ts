@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { openDatabase, type Db } from "./db";
 import { asanaCache } from "./schema";
-import { UNFILED, listTaskPage, listTaskProjects, listTaskWorkspaces } from "./tasks";
+import {
+  UNFILED,
+  countTasks,
+  listTaskPage,
+  listTaskProjects,
+  listTaskWorkspaces,
+} from "./tasks";
 
 let dir: string;
 let db: Db;
@@ -164,5 +170,16 @@ describe("listTaskProjects", () => {
   it("omits unfiled when everything has a project", () => {
     db.$client.prepare("DELETE FROM asana_cache WHERE gid = '4'").run();
     expect(listTaskProjects(db)).toEqual(["Billing", "Marketing"]);
+  });
+});
+
+describe("countTasks", () => {
+  it("counts incomplete tasks by default", () => {
+    expect(countTasks(db)).toBe(4);
+  });
+
+  it("counts what matches a filter", () => {
+    expect(countTasks(db, { project: "Billing" })).toBe(2);
+    expect(countTasks(db, { completed: true })).toBe(1);
   });
 });
