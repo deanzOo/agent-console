@@ -227,6 +227,7 @@ place and not the other. **Add a check there and nowhere else.**
 | Dependency audit    | `npm audit --audit-level=high`                                             |
 | No hardcoded config | Rejects credential shapes and deployment-specific literals                 |
 | Deep scan           | Trivy: secrets and IaC misconfiguration                                    |
+| Secret history scan | gitleaks over the whole history, not just the tree                         |
 
 Hooks are convenience, not the boundary — `--no-verify` skips them, so everything runs again in CI.
 
@@ -243,11 +244,12 @@ check that only fails after a push.
 
 **Host-installed tooling, complete list:**
 
-| Tool                       | Needed for                                | Without it                                                                          |
-| -------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------- |
-| Node 22+, npm              | Everything                                | Nothing works                                                                       |
-| git                        | The product itself — clones and worktrees | Nothing works                                                                       |
-| [trivy](https://trivy.dev) | The secret and IaC deep scan              | That one check is **skipped locally with a notice**; CI still runs it on every push |
+| Tool                            | Needed for                                | Without it                                                                          |
+| ------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------- |
+| Node 22+, npm                   | Everything                                | Nothing works                                                                       |
+| git                             | The product itself — clones and worktrees | Nothing works                                                                       |
+| [trivy](https://trivy.dev)      | The secret and IaC deep scan              | That one check is **skipped locally with a notice**; CI still runs it on every push |
+| [gitleaks](https://gitleaks.io) | The secret history scan                   | That one check is **skipped locally with a notice**; CI still runs it on every push |
 
 That is the whole list, and it should stay that way. Everything else — ESLint, Prettier, vitest, jscpd,
 markdownlint, the link checker, commitlint, drizzle-kit — is a dev dependency.

@@ -55,6 +55,17 @@ for entry in "${PATTERNS[@]}"; do
   fi
 done
 
+# .env.example is excluded from the scan above because it is the one file meant
+# to name every key, and it carries harmless defaults like HOST and PORT. What
+# it must never carry is a secret, which is also what lets gitleaks skip it: the
+# rule here is stricter than gitleaks', because it rejects any value at all
+# rather than only ones that look secret.
+if filled=$(grep -nE '^[A-Za-z_][A-Za-z0-9_]*(TOKEN|KEY|SECRET|PASSWORD)[A-Za-z0-9_]*=.+' .env.example 2>/dev/null); then
+  echo "::error::.env.example names secrets but must never carry their values:"
+  echo "$filled"
+  failed=1
+fi
+
 if [ "$failed" -ne 0 ]; then
   echo
   echo "Deployment-specific values must come from env vars or the settings table."
