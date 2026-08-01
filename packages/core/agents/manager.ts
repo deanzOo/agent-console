@@ -16,6 +16,22 @@ import { planRecovery } from "./recover";
 import { createSdkDriver } from "./driver";
 import { MissionSession } from "./session";
 import { createMission } from "../missions";
+import { resolveCredentials } from "../settings";
+
+/**
+ * The GitHub token as the operator actually configured it.
+ *
+ * `/setup` writes it to the settings table, so reading the environment alone
+ * finds nothing on a deployment configured through the wizard — which is why
+ * clones were anonymous and every agent reached the push with no credential.
+ */
+function githubToken(db: Db): string | undefined {
+  const config = getConfig();
+  return resolveCredentials(db, {
+    githubToken: config.githubToken,
+    asanaToken: config.asanaToken,
+  }).githubToken;
+}
 
 export interface LaunchInput {
   readonly title: string;
@@ -61,7 +77,7 @@ export async function launchMission(input: LaunchInput): Promise<string> {
     const session = new MissionSession(db, mission.id);
     sessions.set(mission.id, session);
 
-    session.start(createSdkDriver(), {
+    session.start(createSdkDriver(githubToken(db)), {
       missionId: mission.id,
       prompt: input.prompt,
       cwd,
@@ -94,7 +110,7 @@ async function prepareWorkspace(
   if (!input.repo) return undefined;
 
   const config = getConfig();
-  const env = { workspaceRoot: config.workspaceRoot, token: config.githubToken };
+  const env = { workspaceRoot: config.workspaceRoot, token: githubToken(db) };
 
   const bare = await ensureBareClone(env, input.repo);
   const base = input.base ?? (await defaultBranch(bare));
@@ -148,7 +164,7 @@ export async function recoverMissions(): Promise<{ resumed: number; stopped: num
 
     const session = new MissionSession(db, mission.id);
     sessions.set(mission.id, session);
-    session.start(createSdkDriver(), {
+    session.start(createSdkDriver(githubToken(db)), {
       missionId: mission.id,
       prompt: "Continue where you left off.",
       cwd: mission.worktreePath || config.workspaceRoot,
