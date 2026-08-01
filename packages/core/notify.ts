@@ -1,5 +1,6 @@
 const MAX_BODY = 140;
 
+import type { MissionStatus } from "./missions";
 import { MISSION_STATUS } from "./schema";
 
 export type NotificationKind =
@@ -36,6 +37,11 @@ const HEADINGS: Record<NotificationKind, string> = {
   [MISSION_STATUS.DONE]: "Mission finished",
   [MISSION_STATUS.FAILED]: "Mission failed",
 };
+
+/** Whether reaching this status is worth waking the operator for. */
+export function isNotifiable(status: MissionStatus): status is NotificationKind {
+  return status in HEADINGS;
+}
 
 function truncate(text: string, limit: number): string {
   return text.length <= limit ? text : `${text.slice(0, limit - 1)}…`;

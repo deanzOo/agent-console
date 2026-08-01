@@ -106,6 +106,10 @@ function textMessage(text: string): SDKMessage {
   return JSON.parse(JSON.stringify({ type: "assistant", text }));
 }
 
+function resultMessage(): SDKMessage {
+  return JSON.parse(JSON.stringify({ type: "result", subtype: "success" }));
+}
+
 async function settle() {
   for (let i = 0; i < 5; i += 1) await Promise.resolve();
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -356,5 +360,44 @@ describe("changing permission mode", () => {
   it("refuses on a session that never started", async () => {
     const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
     expect(await new MissionSession(db, mission.id).setMode("plan")).toBe(false);
+  });
+});
+
+// Streaming input keeps the session open so the operator can reply, which means
+// the message stream does not end when the agent stops working. Without this the
+// mission reads as running forever, having plainly said it was finished.
+describe("finishing a turn", () => {
+  it("marks the mission done when the agent stops working", async () => {
+    const fake = fakeDriver();
+    const { mission } = start(fake);
+
+    fake.emit(resultMessage());
+    await settle();
+
+    expect(getMission(db, mission.id)?.status).toBe("done");
+  });
+
+  it("puts it back to running when the operator replies", async () => {
+    const fake = fakeDriver();
+    const { mission, session } = start(fake);
+    fake.emit(resultMessage());
+    await settle();
+    expect(getMission(db, mission.id)?.status).toBe("done");
+
+    session.say("one more thing");
+
+    expect(getMission(db, mission.id)?.status).toBe("running");
+  });
+
+  // The session is still live and still resumable, so it must stay in the
+  // registry: the operator can reply to a finished mission and carry on.
+  it("leaves the session able to take a reply", async () => {
+    const fake = fakeDriver();
+    const { session } = start(fake);
+    fake.emit(resultMessage());
+    await settle();
+
+    expect(session.say("carry on")).toBe(true);
+    expect(fake.said).toContain("carry on");
   });
 });
