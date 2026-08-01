@@ -19,6 +19,19 @@ function cloneUrl(fullName: string, token: string | undefined): string {
     : `https://github.com/${fullName}.git`;
 }
 
+// `git clone --bare` configures no fetch refspec, so a plain `git fetch origin`
+// updates FETCH_HEAD and nothing else: the clone's branches stay frozen at the
+// moment it was created. Fetching into remote-tracking refs also keeps the
+// fetch clear of refs/heads/*, which git refuses to move while a mission's
+// worktree has that branch checked out.
+const FETCH_REFSPEC = "+refs/heads/*:refs/remotes/origin/*";
+
+/** Brings an existing clone up to date with the remote. */
+export async function refreshClone(bare: string): Promise<void> {
+  await run("git", ["--git-dir", bare, "config", "remote.origin.fetch", FETCH_REFSPEC]);
+  await run("git", ["--git-dir", bare, "fetch", "--prune", "origin"]);
+}
+
 export async function ensureBareClone(
   env: GitEnvironment,
   fullName: string,
@@ -28,10 +41,11 @@ export async function ensureBareClone(
 
   try {
     await run("git", ["--git-dir", target, "rev-parse", "--git-dir"]);
-    await run("git", ["--git-dir", target, "fetch", "--prune", "origin"]);
   } catch {
     await run("git", ["clone", "--bare", cloneUrl(fullName, env.token), target]);
   }
+
+  await refreshClone(target);
   return target;
 }
 

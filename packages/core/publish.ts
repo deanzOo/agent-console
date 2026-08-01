@@ -12,11 +12,12 @@ export interface PushInput {
   readonly worktreePath: string;
   readonly branch: string;
   /**
-   * The branch the work started from, by plain name.
+   * The branch the work is destined for, by plain name.
    *
-   * A bare clone has no remote-tracking refs, so `origin/main` names nothing in
-   * a worktree cut from one — the same trap that once killed every repo-backed
-   * mission at creation.
+   * Compared against as `origin/<base>` and sent to GitHub as `<base>`: the
+   * clone's own refs/heads/* are frozen at the moment it was cloned, so
+   * counting commits against them credits the mission with work that was
+   * already on the remote.
    */
   readonly base: string;
   readonly token?: string | undefined;
@@ -33,7 +34,7 @@ async function git(cwd: string, args: string[], token: string | undefined) {
 async function hasCommits(input: PushInput): Promise<boolean> {
   const { stdout } = await git(
     input.worktreePath,
-    ["log", "--oneline", `${input.base}..${input.branch}`],
+    ["log", "--oneline", `origin/${input.base}..${input.branch}`],
     input.token,
   );
   return stdout.trim().length > 0;
@@ -128,7 +129,7 @@ export type PublishResult =
 async function commitSubjects(input: PushInput): Promise<string[]> {
   const { stdout } = await git(
     input.worktreePath,
-    ["log", "--format=%s", `${input.base}..${input.branch}`],
+    ["log", "--format=%s", `origin/${input.base}..${input.branch}`],
     input.token,
   );
   return stdout.split("\n").filter(Boolean);
