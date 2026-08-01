@@ -110,6 +110,16 @@ TLS, proxying to `127.0.0.1:3000`.
 Open the hostname and complete `/setup`. Each credential is validated live, so a wrong token fails there
 rather than halfway through your first mission.
 
+## Upgrading
+
+Pull, build, restart. **A redeploy no longer ends a mission**: the session host stores each session's id as it
+runs and resumes anything the database still calls live when it comes back. A mission it will not resume is
+stopped with the reason recorded in its transcript — no session to resume, a working tree that is gone, too
+many attempts already, or too many waiting at once.
+
+An approval that was open when the process went down is closed, and the agent asks again after resuming. Seeing
+the same request twice beats losing the work behind it.
+
 ## Verify
 
 - `systemctl status agent-console` is active, and stays active across `sudo reboot`.

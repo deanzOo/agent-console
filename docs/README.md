@@ -15,7 +15,8 @@ a reference that tells a story is useless for lookup.
 ## When you change something
 
 - New environment variable or setting → `reference/configuration.md` **and** `.env.example`.
-- New API route → `reference/api.md`.
+- New API route → [`reference/api.md`](reference/api.md).
+- New check in the gate → `ci/checks.json` **and** [`reference/checks.md`](reference/checks.md).
 - New deployment step → the relevant `how-to/` guide.
 - A decision with a lasting consequence → a new ADR. Never edit an accepted one; supersede it.
 
