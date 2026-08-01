@@ -84,6 +84,31 @@ describe("reconcileOrphans", () => {
     expect(reconcileOrphans(db)).toBe(0);
   });
 
+  // Seen on the deployment: a mission finished with an approval still open, so
+  // the console kept offering a decision that could never be delivered.
+  it.each([MISSION_STATUS.DONE, MISSION_STATUS.FAILED, MISSION_STATUS.STOPPED])(
+    "closes prompts left open on a mission that is already %s",
+    (status) => {
+      const id = mission(status);
+      recordPrompt(db, { missionId: id, kind: PROMPT_KIND.TOOL_APPROVAL, input: {} });
+
+      reconcileOrphans(db);
+
+      expect(openPrompts(db, id)).toHaveLength(0);
+      expect(getMission(db, id)?.status).toBe(status);
+    },
+  );
+
+  it("does not touch prompts on a mission that is genuinely live", () => {
+    const id = mission(MISSION_STATUS.AWAITING_INPUT);
+    recordPrompt(db, { missionId: id, kind: PROMPT_KIND.TOOL_APPROVAL, input: {} });
+    archiveMission(db, id);
+
+    reconcileOrphans(db);
+
+    expect(openPrompts(db, id)).toHaveLength(1);
+  });
+
   it("is safe to run when there is nothing to do", () => {
     expect(reconcileOrphans(db)).toBe(0);
   });
