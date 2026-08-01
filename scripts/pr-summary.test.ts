@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,20 +15,22 @@ function rowFor(output: string, label: string): string {
 /** Runs the script over a `git diff --numstat` fixture fed on stdin. */
 function summarize(numstat: string, coverage?: unknown): string {
   const args = [SCRIPT];
-  let file: string | undefined;
+  let dir: string | undefined;
   if (coverage) {
-    file = path.join(tmpdir(), `cov-${process.pid}-${counter++}.json`);
+    // mkdtemp rather than a name built from the pid: a predictable path in a
+    // directory everyone can write to is one an attacker can get there first
+    // with, as a symlink pointing wherever they like.
+    dir = mkdtempSync(path.join(tmpdir(), "pr-summary-"));
+    const file = path.join(dir, "coverage-summary.json");
     writeFileSync(file, JSON.stringify(coverage));
     args.push("--coverage", file);
   }
   try {
     return execFileSync("node", args, { input: numstat, encoding: "utf8" });
   } finally {
-    if (file) rmSync(file, { force: true });
+    if (dir) rmSync(dir, { recursive: true, force: true });
   }
 }
-
-let counter = 0;
 
 function coveredFile(pct: number) {
   return {
