@@ -4,11 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { groupTranscript, toTranscript } from "@agent-console/core/transcript";
 import { Composer } from "./composer";
 import { MissionActions } from "./mission-actions";
+import { PublishButton } from "./publish-button";
 import { TranscriptRow } from "./transcript-row";
 
 // Close enough to the end that the reader is following along rather than
 // reading back through what already happened.
 const FOLLOW_THRESHOLD_PX = 120;
+
+const LIVE_STATUSES = ["starting", "running", "awaiting_input"];
 import type { OpenPrompt, StoredEvent } from "@agent-console/core/missions";
 import { PROMPT_KIND } from "@agent-console/core/schema";
 
@@ -171,10 +174,14 @@ export function MissionLive({
         </section>
       ))}
 
-      <Composer
-        missionId={mission.id}
-        live={["starting", "running", "awaiting_input"].includes(status)}
-      />
+      {/* A finished mission still holds its session, so it can still be told
+          to do one more thing — and a mission whose branch never reached the
+          remote has nowhere else to go. */}
+      {mission.branch && !LIVE_STATUSES.includes(status) && (
+        <PublishButton missionId={mission.id} />
+      )}
+
+      <Composer missionId={mission.id} live={status !== "failed"} />
     </main>
   );
 }
