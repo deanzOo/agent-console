@@ -1,30 +1,26 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createSandbox, type Sandbox } from "./test-support/sandbox";
 import { openPullRequest, publishWork, pushBranch } from "./publish";
 
+let sandbox: Sandbox;
 let root: string;
 let origin: string;
 let work: string;
 
-const BRANCH = "agent/does-a-thing";
+// Distinctive on purpose: if one of these ever reaches a real repository again,
+// its name says where it came from.
+const BRANCH = "fixture/does-a-thing";
 
 function git(cwd: string, ...args: string[]) {
-  execFileSync("git", args, {
-    cwd,
-    stdio: "pipe",
-    env: {
-      ...process.env,
-      GIT_CONFIG_GLOBAL: "/dev/null",
-      GIT_CONFIG_SYSTEM: "/dev/null",
-    },
-  });
+  sandbox.git(cwd, ...args);
 }
 
 beforeEach(() => {
-  root = mkdtempSync(path.join(tmpdir(), "publish-"));
+  sandbox = createSandbox("publish-");
+  root = sandbox.root;
   origin = path.join(root, "origin.git");
   work = path.join(root, "work");
   mkdirSync(work, { recursive: true });
@@ -40,7 +36,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  sandbox.cleanup();
   vi.unstubAllGlobals();
 });
 
