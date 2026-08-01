@@ -18,6 +18,11 @@ export const dynamic = "force-dynamic";
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // Installed PWAs have no address bar to signal a stray pinch-zoom, and the
+  // layout doesn't reflow for it, so a zoom gesture leaves the view broken
+  // with no way to recover short of reopening the app.
+  maximumScale: 1,
+  userScalable: false,
   themeColor: "#0a0a0a",
 };
 
