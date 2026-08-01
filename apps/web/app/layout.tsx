@@ -30,6 +30,10 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   themeColor: "#0a0a0a",
+  // Without "cover", iOS never populates env(safe-area-inset-*): fixed
+  // controls near an edge would sit flush against the home indicator instead
+  // of clearing it.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

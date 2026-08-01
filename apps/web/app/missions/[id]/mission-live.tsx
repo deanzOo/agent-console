@@ -14,6 +14,7 @@ const FOLLOW_THRESHOLD_PX = 120;
 const LIVE_STATUSES = ["starting", "running", "awaiting_input"];
 import type { OpenPrompt, StoredEvent } from "@agent-console/core/missions";
 import { PROMPT_KIND } from "@agent-console/core/schema";
+import { BackToNav } from "./back-to-nav";
 
 interface MissionView {
   readonly id: string;
@@ -182,6 +183,7 @@ export function MissionLive({
       )}
 
       <Composer missionId={mission.id} live={status !== "failed"} />
+      <BackToNav />
     </main>
   );
 }
