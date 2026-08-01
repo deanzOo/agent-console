@@ -35,6 +35,37 @@ describe("pr-summary", () => {
     expect(rowFor(output, "Test")).toContain("+52");
   });
 
+  // A workflow file is not application code, and counting it as such made a
+  // change that was almost entirely CI configuration look untested.
+  it("counts configuration separately from application code", () => {
+    const output = summarize(
+      [
+        row(60, 0, ".github/workflows/pr-summary.yml"),
+        row(19, 0, ".gitleaks.toml"),
+        row(8, 0, "ci/checks.json"),
+        row(136, 0, "scripts/pr-summary.mjs"),
+        row(107, 0, "scripts/pr-summary.test.ts"),
+      ].join("\n"),
+    );
+
+    expect(rowFor(output, "Config")).toContain("+87");
+    expect(rowFor(output, "App")).toContain("+136");
+  });
+
+  // 107 test lines against 136 of application code, not against the 240 that
+  // counting configuration as application code would have produced.
+  it("measures the ratio against application code alone", () => {
+    const output = summarize(
+      [
+        row(60, 0, ".github/workflows/pr-summary.yml"),
+        row(136, 0, "scripts/pr-summary.mjs"),
+        row(107, 0, "scripts/pr-summary.test.ts"),
+      ].join("\n"),
+    );
+
+    expect(output).toContain("79%");
+  });
+
   it("counts documentation separately from code", () => {
     const output = summarize(row(12, 3, "docs/adr/0008-a-decision.md"));
 

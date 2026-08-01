@@ -7,12 +7,18 @@
 // the first argument.
 
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 const MIGRATIONS = "drizzle/";
 const CONFIG_CONTRACT = ".env.example";
 const GATE = "ci/checks.json";
 
 const DOC_EXTENSIONS = [".md"];
+
+// Counting these as application code makes a change that is mostly CI
+// configuration read as untested, which is the opposite of informative.
+const CONFIG_EXTENSIONS = [".yml", ".yaml", ".toml", ".json"];
+const CONFIG_DIRECTORIES = [".github/", "ci/"];
 
 function isTest(file) {
   return file.includes(".test.") || file.includes("/__tests__/");
@@ -22,10 +28,18 @@ function isDoc(file) {
   return DOC_EXTENSIONS.some((extension) => file.endsWith(extension));
 }
 
-/** Which of the three columns a file belongs in. */
+function isConfig(file) {
+  return (
+    CONFIG_EXTENSIONS.some((extension) => file.endsWith(extension)) ||
+    CONFIG_DIRECTORIES.some((directory) => file.startsWith(directory))
+  );
+}
+
+/** Which column a file belongs in. */
 export function classify(file) {
   if (isDoc(file)) return "docs";
-  return isTest(file) ? "test" : "app";
+  if (isTest(file)) return "test";
+  return isConfig(file) ? "config" : "app";
 }
 
 // Reading fd 0 directly throws EAGAIN when stdin is a non-blocking pipe, which
@@ -51,6 +65,7 @@ export function summarize(numstat) {
     app: { added: 0, removed: 0, files: 0 },
     test: { added: 0, removed: 0, files: 0 },
     docs: { added: 0, removed: 0, files: 0 },
+    config: { added: 0, removed: 0, files: 0 },
   };
   const touched = [];
 
@@ -99,12 +114,38 @@ function checkpoints(touched) {
   return lines;
 }
 
-export function render({ totals, touched }) {
+// The counterpart to the per-change ratio: how much test code the project
+// carries overall. A change can be light on tests without the codebase being.
+function codebaseRatio() {
+  try {
+    const files = execFileSync("git", ["ls-files", "*.ts", "*.tsx"], {
+      encoding: "utf8",
+    })
+      .split("\n")
+      .filter(Boolean);
+
+    let app = 0;
+    let test = 0;
+    for (const file of files) {
+      const lines = readFileSync(file, "utf8").split("\n").length;
+      if (isTest(file)) test += lines;
+      else app += lines;
+    }
+    if (app === 0) return undefined;
+    return `Across the codebase: **${Math.round((test / app) * 100)}%** test lines per application line.`;
+  } catch {
+    // Only ever a nicety; a summary without it is still a summary.
+    return undefined;
+  }
+}
+
+export function render({ totals, touched }, includeCodebase = false) {
   if (touched.length === 0) return "No files changed.";
 
   const rows = [
     ["App", totals.app],
     ["Test", totals.test],
+    ["Config", totals.config],
     ["Docs", totals.docs],
   ]
     .filter(([, bucket]) => bucket.files > 0)
@@ -121,16 +162,21 @@ export function render({ totals, touched }) {
         ? "**This change carries no test code.**"
         : `Test lines per application line: **${proportion}%**`;
 
+  const overall = includeCodebase ? codebaseRatio() : undefined;
+
   return [
     "| | Files | Added | Removed |",
     "| --- | ---: | ---: | ---: |",
     ...rows,
     "",
     verdict,
+    ...(overall ? [overall] : []),
     "",
     ...checkpoints(touched),
   ].join("\n");
 }
 
 const base = process.argv[2];
-process.stdout.write(`${render(summarize(await readNumstat(base)))}\n`);
+// Off when reading a fixture on stdin: the ratio would be that of whatever
+// repository the test happens to run in.
+process.stdout.write(`${render(summarize(await readNumstat(base)), Boolean(base))}\n`);
