@@ -233,6 +233,15 @@ place and not the other. **Add a check there and nowhere else.**
 
 Hooks are convenience, not the boundary — `--no-verify` skips them, so everything runs again in CI.
 
+### Mutation testing answers what coverage cannot
+
+Coverage says a line ran. It cannot say a test would have noticed if the line were wrong. `npm run mutation`
+changes the code — flips a comparison, empties a string, drops a call — and reports which changes no test
+objected to. Every survivor is a line the suite executes without asserting anything about.
+
+It runs weekly and on request rather than in the gate: it runs the suite once per mutant, so it costs minutes
+where the gate costs seconds. Treat a survivor as a missing assertion, not as a line to delete.
+
 **Remotely, the suite runs only on pushes to `main` and PRs whose base is `main`.** A stacked PR onto
 another feature branch runs nothing, so the whole stack costs one run instead of one per branch. Until a
 branch is proposed to `main`, `npm run ci` and the `pre-push` hook are the only signal — which is the reason
