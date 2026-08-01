@@ -22,3 +22,7 @@ dist/
 
 # Deployment target. scripts/deploy.sh is generic; this names your server.
 .deploy.env
+
+# Stryker writes its sandboxes and reports here; both are local artifacts.
+.stryker-tmp/
+reports/

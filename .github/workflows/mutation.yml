@@ -1,0 +1,43 @@
+name: Mutation
+
+# Not on every pull request: it runs the suite once per mutant, which is minutes
+# rather than seconds. Weekly and on request is enough for what it answers —
+# whether the tests assert anything, which changes slowly.
+on:
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutate:
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    env:
+      HUSKY: 0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Mutate
+        run: npx stryker run
+
+      # The report names every mutant that lived, which is the list worth
+      # reading — each one is a change to the code that no test objected to.
+      - name: Keep the report
+        if: always() && hashFiles('reports/mutation/mutation.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mutation-report
+          path: reports/mutation/mutation.json
+          retention-days: 30
