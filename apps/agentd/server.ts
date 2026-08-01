@@ -12,7 +12,7 @@ import {
 import type { StoredEvent } from "@agent-console/core/missions";
 import { reconcileOrphans } from "@agent-console/core/agents/orphans";
 import { recoverMissions } from "@agent-console/core/agents/manager";
-import { formatSseEvent, parseSince } from "@agent-console/core/sse";
+import { formatSseEvent, HEARTBEAT_MS, parseSince } from "@agent-console/core/sse";
 import { answerPromptSchema, launchMissionSchema } from "@agent-console/core/protocol";
 import { matchRoute } from "./routes";
 
@@ -31,7 +31,6 @@ const saySchema = z.object({ text: z.string().trim().min(1).max(10_000) });
 // pointless, and the agent has a shell in a container holding a git token.
 const modeSchema = z.object({ mode: z.enum(["default", "acceptEdits", "plan"]) });
 
-const HEARTBEAT_MS = 25_000;
 const MAX_BODY_BYTES = 1_000_000;
 
 function json(response: ServerResponse, status: number, body: unknown): void {
