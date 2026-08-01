@@ -6,6 +6,7 @@ import { countIssues } from "@agent-console/core/issues";
 import { countMissions } from "@agent-console/core/missions";
 import { countTasks } from "@agent-console/core/tasks";
 import { resolveCredentials } from "@agent-console/core/settings";
+import { LiveRefresh } from "./live-refresh";
 import { PushToggle } from "./push-toggle";
 import { SyncButton } from "./sync-button";
 
@@ -39,6 +40,7 @@ export function Nav() {
 
   return (
     <nav className="mb-6 flex items-center gap-4 border-b border-neutral-200 pb-3 text-sm dark:border-neutral-800">
+      <LiveRefresh />
       <Link href="/" className="font-medium">
         Missions <Count value={missions} />
       </Link>
