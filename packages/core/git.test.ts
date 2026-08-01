@@ -3,7 +3,13 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createWorktree, defaultBranch, pruneWorktrees, removeWorktree } from "./git";
+import {
+  createWorktree,
+  defaultBranch,
+  pruneWorktrees,
+  refreshClone,
+  removeWorktree,
+} from "./git";
 import { barePath, worktreePath } from "./repos";
 
 // A real repository on disk rather than a mock: the bug this covers was that a
@@ -175,5 +181,49 @@ describe("removeWorktree", () => {
       encoding: "utf8",
     });
     expect(listed).not.toContain(MISSION);
+  });
+});
+
+// The bug this covers cost eleven commits of drift: `git clone --bare` sets no
+// fetch refspec at all, so the fetch in ensureBareClone updated nothing and the
+// clone's branches stayed frozen at the moment it was created. Every mission
+// branched from that snapshot and every pull request opened against a base it
+// had never seen.
+describe("keeping the clone current", () => {
+  function upstreamCommit(message: string) {
+    writeFileSync(path.join(origin, `${message}.txt`), "more\n");
+    git(origin, "add", ".");
+    git(origin, "commit", "--quiet", "-m", message);
+    return execFileSync("git", ["-C", origin, "rev-parse", "HEAD"]).toString().trim();
+  }
+
+  it("picks up commits pushed after the clone was made", async () => {
+    const bare = await clone();
+    const tip = upstreamCommit("second");
+
+    await refreshClone(bare);
+
+    const seen = execFileSync("git", ["--git-dir", bare, "rev-parse", "origin/main"])
+      .toString()
+      .trim();
+    expect(seen).toBe(tip);
+  });
+
+  it("branches a new mission from the commit that is on the remote now", async () => {
+    const bare = await clone();
+    const tip = upstreamCommit("third");
+    await refreshClone(bare);
+
+    const tree = await createWorktree(env, {
+      fullName: FULL_NAME,
+      missionId: MISSION,
+      branch: "agent/work",
+      base: "origin/main",
+    });
+
+    const head = execFileSync("git", ["-C", tree, "rev-parse", "HEAD"])
+      .toString()
+      .trim();
+    expect(head).toBe(tip);
   });
 });

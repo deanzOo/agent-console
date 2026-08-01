@@ -120,10 +120,10 @@ async function prepareWorkspace(
     fullName: input.repo,
     missionId,
     branch,
-    // A bare clone holds branches in refs/heads and creates no remote-tracking
-    // refs, so the base is the branch name itself. "origin/main" names nothing
-    // there, and every repo-backed mission died on it.
-    base,
+    // The remote-tracking ref, not the plain branch name: the clone's own
+    // refs/heads/* are whatever the remote held when it was first cloned and
+    // never move, which is how eleven commits of drift reached a pull request.
+    base: `origin/${base}`,
   });
 
   recordWorkspace(db, missionId, { branch, worktreePath });
