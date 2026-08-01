@@ -40,7 +40,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <div className="mx-auto max-w-3xl px-4 py-6">
+        {/* viewport-fit=cover puts the page under the notch and the rounded
+            corners, so the insets have to come back as padding or the nav sits
+            beneath the status bar and cannot be tapped. */}
+        <div
+          className="mx-auto max-w-3xl"
+          style={{
+            paddingTop: "max(1.5rem, env(safe-area-inset-top))",
+            paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))",
+            paddingLeft: "max(1rem, env(safe-area-inset-left))",
+            paddingRight: "max(1rem, env(safe-area-inset-right))",
+          }}
+        >
           <Nav />
           {children}
         </div>
