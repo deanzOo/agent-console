@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { z } from "zod";
 import { getConfig } from "@agent-console/core/env";
 import { getDatabase } from "@agent-console/core/db";
 import { getMission, listEvents } from "@agent-console/core/missions";
@@ -22,6 +23,12 @@ const openStreams = new Set<() => void>();
 // A sentinel rather than a throw: the parse failure is expected input, and
 // unwinding for it would be indistinguishable from a real fault.
 const MALFORMED = Symbol("malformed-json");
+
+const saySchema = z.object({ text: z.string().trim().min(1).max(10_000) });
+
+// bypassPermissions is deliberately absent: it would make an approval console
+// pointless, and the agent has a shell in a container holding a git token.
+const modeSchema = z.object({ mode: z.enum(["default", "acceptEdits", "plan"]) });
 
 const HEARTBEAT_MS = 25_000;
 const MAX_BODY_BYTES = 1_000_000;
@@ -191,6 +198,29 @@ async function handle(
   const session = getSession(route.id);
   if (!session) {
     json(response, 409, { error: "session_not_running" });
+    return;
+  }
+
+  if (route.action === "say") {
+    const body = await readJson(request);
+    const parsed = body === MALFORMED ? undefined : saySchema.safeParse(body);
+    if (!parsed?.success) {
+      json(response, 400, { error: "invalid_request" });
+      return;
+    }
+    json(response, session.say(parsed.data.text) ? 200 : 409, { ok: true });
+    return;
+  }
+
+  if (route.action === "mode") {
+    const body = await readJson(request);
+    const parsed = body === MALFORMED ? undefined : modeSchema.safeParse(body);
+    if (!parsed?.success) {
+      json(response, 400, { error: "invalid_mode" });
+      return;
+    }
+    const changed = await session.setMode(parsed.data.mode);
+    json(response, changed ? 200 : 409, { ok: changed });
     return;
   }
 

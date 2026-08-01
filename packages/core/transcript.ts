@@ -134,6 +134,10 @@ export function summarise(event: StoredEvent): TranscriptEntry {
       return fromUser(payload);
     case "mission.status":
       return fromStatus(payload);
+    case "mission.said":
+      return { kind: "said", who: "operator", text: asString(payload.text) };
+    case "mission.mode":
+      return { kind: "note", text: `mode changed to ${asString(payload.mode)}` };
     case "mission.created":
       return { kind: "said", who: "operator", text: asString(payload.prompt) };
     case "mission.prompt": {

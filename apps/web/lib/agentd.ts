@@ -95,6 +95,36 @@ export function stopMission(missionId: string): Promise<AgentdOutcome<unknown>> 
   );
 }
 
+export function sayToMission(
+  missionId: string,
+  text: string,
+): Promise<AgentdOutcome<unknown>> {
+  return send(
+    `/missions/${encodeURIComponent(missionId)}/say`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+    },
+    asJson,
+  );
+}
+
+export function setMissionMode(
+  missionId: string,
+  mode: string,
+): Promise<AgentdOutcome<unknown>> {
+  return send(
+    `/missions/${encodeURIComponent(missionId)}/mode`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode }),
+    },
+    asJson,
+  );
+}
+
 export function interruptMission(missionId: string): Promise<AgentdOutcome<unknown>> {
   return send(
     `/missions/${encodeURIComponent(missionId)}/interrupt`,

@@ -1,4 +1,8 @@
-import type { PermissionResult, SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import type {
+  PermissionMode,
+  PermissionResult,
+  SDKMessage,
+} from "@anthropic-ai/claude-agent-sdk";
 import type { Db } from "../db";
 import {
   appendEvent,
@@ -39,6 +43,9 @@ export interface AgentDriver {
 
 export interface AgentRun {
   readonly messages: AsyncIterable<SDKMessage>;
+  /** Sends the operator's words to a session that is already running. */
+  say(text: string): void;
+  setMode(mode: PermissionMode): Promise<void>;
   interrupt(): Promise<void>;
   close(): void;
 }
@@ -95,6 +102,23 @@ export class MissionSession {
     this.#pending.cancelAll("Session stopped.");
     this.#run?.close();
     await this.#finished;
+  }
+
+  /** The operator speaking mid-mission, recorded before it is delivered. */
+  say(text: string): boolean {
+    if (!this.#run) return false;
+    this.#record("mission.said", { text });
+    this.#run.say(text);
+    return true;
+  }
+
+  async setMode(mode: PermissionMode): Promise<boolean> {
+    if (!this.#run) return false;
+    await this.#run.setMode(mode);
+    // Recorded, because a transcript where approvals simply stop appearing is
+    // worse than one that says the posture changed and to what.
+    this.#record("mission.mode", { mode });
+    return true;
   }
 
   async #requestPermission(

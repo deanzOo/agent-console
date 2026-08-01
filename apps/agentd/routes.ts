@@ -3,7 +3,7 @@ export const AGENTD_ROUTES = {
   MISSIONS: "/missions",
 } as const;
 
-export type AgentdAction = "answer" | "interrupt" | "stop" | "events";
+export type AgentdAction = "answer" | "interrupt" | "stop" | "events" | "say" | "mode";
 
 export interface AgentdRequest {
   readonly method: string;
@@ -21,6 +21,8 @@ const ACTIONS: Record<string, { action: AgentdAction; method: string }> = {
   interrupt: { action: "interrupt", method: "POST" },
   stop: { action: "stop", method: "POST" },
   events: { action: "events", method: "GET" },
+  say: { action: "say", method: "POST" },
+  mode: { action: "mode", method: "POST" },
 };
 
 // The caller percent-encodes the id, so it has to be decoded here or an id

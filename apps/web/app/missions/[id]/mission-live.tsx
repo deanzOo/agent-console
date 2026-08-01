@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toTranscript } from "@agent-console/core/transcript";
+import { Composer } from "./composer";
 import { MissionActions } from "./mission-actions";
 import { TranscriptRow } from "./transcript-row";
 
@@ -158,6 +159,11 @@ export function MissionLive({
           </div>
         </section>
       ))}
+
+      <Composer
+        missionId={mission.id}
+        live={["starting", "running", "awaiting_input"].includes(status)}
+      />
     </main>
   );
 }
