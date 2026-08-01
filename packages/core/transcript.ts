@@ -12,6 +12,12 @@ export type TranscriptEntry =
   | { readonly kind: "said"; readonly who: "agent" | "operator"; readonly text: string }
   | { readonly kind: "thinking"; readonly text: string }
   | { readonly kind: "tool"; readonly name: string; readonly summary: string }
+  | {
+      readonly kind: "edit";
+      readonly path: string;
+      readonly removed: string[];
+      readonly added: string[];
+    }
   | { readonly kind: "output"; readonly text: string; readonly failed: boolean }
   | { readonly kind: "status"; readonly text: string; readonly error?: string }
   | { readonly kind: "asked"; readonly name: string; readonly summary: string }
@@ -86,6 +92,50 @@ function readToolResult(
 
 // Reasoning is how it got there, not what it did. It stays reachable as raw,
 // because when something goes wrong it is the first thing worth reading.
+const EDIT_TOOLS = ["Edit", "MultiEdit", "Write", "NotebookEdit"];
+
+function linesOf(value: unknown): string[] {
+  const text = asString(value);
+  // An empty string is no lines, not one blank one — otherwise every insertion
+  // reports a removal it did not make.
+  return text === "" ? [] : text.split("\n");
+}
+
+// An Edit replaces one string with another, so the change is already stated:
+// the old lines go, the new lines arrive. No diff algorithm needed, and the
+// counts are exact rather than approximated.
+function readEdit(name: string, input: unknown): TranscriptEntry | undefined {
+  const fields = asRecord(input);
+  const path = asString(fields.file_path) || asString(fields.path) || name;
+
+  const edits = Array.isArray(fields.edits) ? fields.edits.map(asRecord) : undefined;
+  if (edits) {
+    return {
+      kind: "edit",
+      path,
+      removed: edits.flatMap((edit) => linesOf(edit.old_string)),
+      added: edits.flatMap((edit) => linesOf(edit.new_string)),
+    };
+  }
+
+  if ("old_string" in fields || "new_string" in fields) {
+    return {
+      kind: "edit",
+      path,
+      removed: linesOf(fields.old_string),
+      added: linesOf(fields.new_string),
+    };
+  }
+
+  // Write replaces the file, so everything in it is an addition.
+  const content = fields.content ?? fields.new_source;
+  if (content !== undefined) {
+    return { kind: "edit", path, removed: [], added: linesOf(content) };
+  }
+
+  return undefined;
+}
+
 function fromAssistant(payload: Record<string, unknown>): TranscriptEntry {
   if (asString(payload.thinking) !== "") return { kind: "hidden" };
 
@@ -95,6 +145,10 @@ function fromAssistant(payload: Record<string, unknown>): TranscriptEntry {
     }
     if (block.type === "tool_use") {
       const name = asString(block.name) || "a tool";
+      if (EDIT_TOOLS.includes(name)) {
+        const edit = readEdit(name, block.input);
+        if (edit) return edit;
+      }
       return { kind: "tool", name, summary: describeToolInput(name, block.input) };
     }
     if (block.type === "thinking") return { kind: "hidden" };
@@ -162,6 +216,59 @@ export function summarise(event: StoredEvent): TranscriptEntry {
     default:
       return { kind: "note", text: event.type };
   }
+}
+
+export interface Aside {
+  readonly label: string;
+  readonly items: TranscriptItem[];
+}
+
+export interface TranscriptRow {
+  readonly item: TranscriptItem;
+  /** Hidden runs that happened around this entry, shown beside it. */
+  readonly aside: Aside[];
+}
+
+/**
+ * Turns a stream of events into rows of things the agent actually did, with
+ * everything else tucked alongside.
+ *
+ * Hidden events used to get a line each. One real mission produced 164
+ * `agent.system` events, so even as one-line placeholders that was 164 rows to
+ * scroll past. They now hang off the entry they followed, folded by type and
+ * counted, so the column reads as a conversation and nothing is lost.
+ */
+export function groupTranscript(items: readonly TranscriptItem[]): TranscriptRow[] {
+  const rows: TranscriptRow[] = [];
+  let pending: Aside[] = [];
+
+  const fold = (item: TranscriptItem) => {
+    const last = pending.at(-1);
+    // Only a run of the same type folds: "agent.system (3)" says something,
+    // "hidden (3)" of three different kinds says nothing.
+    if (last && last.label === item.type) last.items.push(item);
+    else pending.push({ label: item.type, items: [item] });
+  };
+
+  for (const item of items) {
+    if (item.entry.kind === "hidden") {
+      fold(item);
+      continue;
+    }
+
+    const previous = rows.at(-1);
+    // Anything before the first visible entry hangs off that entry instead,
+    // rather than opening the transcript with a row of noise.
+    if (previous) previous.aside.push(...pending);
+    rows.push({ item, aside: previous ? [] : pending });
+    pending = [];
+  }
+
+  // Whatever trailed the last entry belongs to it.
+  const last = rows.at(-1);
+  if (last) last.aside.push(...pending);
+
+  return rows;
 }
 
 export function toTranscript(events: readonly StoredEvent[]): TranscriptItem[] {

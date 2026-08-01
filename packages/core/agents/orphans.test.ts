@@ -7,7 +7,6 @@ import {
   archiveMission,
   createMission,
   getMission,
-  listEvents,
   openPrompts,
   recordPrompt,
   setStatus,
@@ -31,66 +30,21 @@ afterEach(() => {
 function mission(status: (typeof MISSION_STATUS)[keyof typeof MISSION_STATUS]) {
   const created = createMission(db, { title: "t", source: "free", prompt: "p" });
   setStatus(db, created.id, status);
+  recordPrompt(db, {
+    missionId: created.id,
+    kind: PROMPT_KIND.TOOL_APPROVAL,
+    input: {},
+  });
   return created.id;
 }
 
 describe("reconcileOrphans", () => {
-  it.each([
-    MISSION_STATUS.STARTING,
-    MISSION_STATUS.RUNNING,
-    MISSION_STATUS.AWAITING_INPUT,
-  ])("stops a mission left %s by a restart", (status) => {
-    const id = mission(status);
-
-    expect(reconcileOrphans(db)).toBe(1);
-    expect(getMission(db, id)?.status).toBe(MISSION_STATUS.STOPPED);
-  });
-
-  // The console offered these and answering returned session_not_running, which
-  // left the operator unable to advance or dismiss the mission.
-  it("closes prompts nobody can answer any more", () => {
-    const id = mission(MISSION_STATUS.AWAITING_INPUT);
-    recordPrompt(db, { missionId: id, kind: PROMPT_KIND.TOOL_APPROVAL, input: {} });
-    recordPrompt(db, { missionId: id, kind: PROMPT_KIND.TOOL_APPROVAL, input: {} });
-    expect(openPrompts(db, id)).toHaveLength(2);
-
-    reconcileOrphans(db);
-
-    expect(openPrompts(db, id)).toHaveLength(0);
-  });
-
-  it("says in the transcript why the mission ended", () => {
-    const id = mission(MISSION_STATUS.RUNNING);
-    reconcileOrphans(db);
-
-    const last = listEvents(db, id, 0).at(-1);
-    expect(JSON.stringify(last?.payload)).toContain("session host restarted");
-  });
-
-  it.each([MISSION_STATUS.DONE, MISSION_STATUS.FAILED, MISSION_STATUS.STOPPED])(
-    "leaves a mission that had already finished as %s",
-    (status) => {
-      const id = mission(status);
-
-      expect(reconcileOrphans(db)).toBe(0);
-      expect(getMission(db, id)?.status).toBe(status);
-    },
-  );
-
-  it("ignores an archived mission", () => {
-    const id = mission(MISSION_STATUS.AWAITING_INPUT);
-    archiveMission(db, id);
-
-    expect(reconcileOrphans(db)).toBe(0);
-  });
-
   // Seen on the deployment: a mission finished with an approval still open, so
-  // the console kept offering a decision that could never be delivered.
+  // the console kept offering a decision that answered session_not_running.
   it.each([MISSION_STATUS.DONE, MISSION_STATUS.FAILED, MISSION_STATUS.STOPPED])(
-    "closes prompts left open on a mission that is already %s",
+    "closes prompts left open on a mission that is %s",
     (status) => {
       const id = mission(status);
-      recordPrompt(db, { missionId: id, kind: PROMPT_KIND.TOOL_APPROVAL, input: {} });
 
       reconcileOrphans(db);
 
@@ -99,9 +53,24 @@ describe("reconcileOrphans", () => {
     },
   );
 
-  it("does not touch prompts on a mission that is genuinely live", () => {
-    const id = mission(MISSION_STATUS.AWAITING_INPUT);
-    recordPrompt(db, { missionId: id, kind: PROMPT_KIND.TOOL_APPROVAL, input: {} });
+  // Whether a live mission comes back is recovery's decision, and it closes
+  // their prompts itself when it gives up on one. Closing them here would
+  // quietly answer an approval a resumed agent is still waiting on.
+  it.each([
+    MISSION_STATUS.STARTING,
+    MISSION_STATUS.RUNNING,
+    MISSION_STATUS.AWAITING_INPUT,
+  ])("leaves a %s mission and its prompts alone", (status) => {
+    const id = mission(status);
+
+    reconcileOrphans(db);
+
+    expect(openPrompts(db, id)).toHaveLength(1);
+    expect(getMission(db, id)?.status).toBe(status);
+  });
+
+  it("ignores archived missions", () => {
+    const id = mission(MISSION_STATUS.DONE);
     archiveMission(db, id);
 
     reconcileOrphans(db);

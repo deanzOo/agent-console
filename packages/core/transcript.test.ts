@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarise, toTranscript } from "./transcript";
+import { groupTranscript, summarise, toTranscript } from "./transcript";
 
 function event(type: string, payload: unknown) {
   return { seq: 1, ts: "2026-07-31T00:00:00.000Z", type, payload };
@@ -180,5 +180,70 @@ describe("toTranscript", () => {
     ]);
     expect(item).toMatchObject({ seq: 4, type: "agent.assistant" });
     expect(item?.raw).toEqual({ thinking: "hm" });
+  });
+});
+
+describe("groupTranscript", () => {
+  function item(seq: number, type: string, payload: unknown) {
+    return toTranscript([{ seq, ts: "t", type, payload }])[0]!;
+  }
+
+  const said = (seq: number) =>
+    item(seq, "agent.assistant", {
+      message: { content: [{ type: "text", text: "hi" }] },
+    });
+  const system = (seq: number) => item(seq, "agent.system", { subtype: "init" });
+
+  it("makes one row per thing the agent actually did", () => {
+    expect(groupTranscript([said(1), said(2)])).toHaveLength(2);
+  });
+
+  // 164 one-line placeholders is still 164 rows to scroll past.
+  it("hangs hidden events off the entry they followed", () => {
+    const rows = groupTranscript([said(1), system(2), system(3)]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.aside).toEqual([
+      { label: "agent.system", items: [expect.anything(), expect.anything()] },
+    ]);
+  });
+
+  it("folds a run by type and keeps every item", () => {
+    const rows = groupTranscript([said(1), system(2), system(3), system(4)]);
+    expect(rows[0]?.aside[0]?.items.map((i) => i.seq)).toEqual([2, 3, 4]);
+  });
+
+  it("only folds runs of the same type", () => {
+    const rate = item(9, "agent.rate_limit_event", {});
+    const rows = groupTranscript([said(1), system(2), rate, system(4)]);
+    expect(rows[0]?.aside.map((a) => a.label)).toEqual([
+      "agent.system",
+      "agent.rate_limit_event",
+      "agent.system",
+    ]);
+  });
+
+  // Opening a transcript with a row of noise is the thing being avoided.
+  it("attaches leading hidden events to the first entry", () => {
+    const rows = groupTranscript([system(1), said(2)]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.item.seq).toBe(2);
+    expect(rows[0]?.aside[0]?.label).toBe("agent.system");
+  });
+
+  it("gives trailing hidden events to the last entry", () => {
+    const rows = groupTranscript([said(1), said(2), system(3)]);
+    expect(rows[1]?.aside[0]?.items.map((i) => i.seq)).toEqual([3]);
+  });
+
+  it("loses nothing", () => {
+    const items = [system(1), said(2), system(3), said(4), system(5)];
+    const rows = groupTranscript(items);
+    const seen = rows.flatMap((row) => [
+      row.item.seq,
+      ...row.aside.flatMap((a) => a.items.map((i) => i.seq)),
+    ]);
+    expect(seen.sort()).toEqual([1, 2, 3, 4, 5]);
   });
 });

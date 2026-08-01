@@ -11,6 +11,7 @@ import {
 } from "@agent-console/core/agents/manager";
 import type { StoredEvent } from "@agent-console/core/missions";
 import { reconcileOrphans } from "@agent-console/core/agents/orphans";
+import { recoverMissions } from "@agent-console/core/agents/manager";
 import { formatSseEvent, parseSince } from "@agent-console/core/sse";
 import { answerPromptSchema, launchMissionSchema } from "@agent-console/core/protocol";
 import { matchRoute } from "./routes";
@@ -269,10 +270,17 @@ const config = getConfig();
 // Leaving them alone strands the operator: the console offers approvals that
 // answer with session_not_running, and the mission can be neither advanced nor
 // dismissed.
-const orphans = reconcileOrphans(getDatabase());
-if (orphans > 0) {
-  process.stdout.write(`agentd: stopped ${orphans} mission(s) left by a restart\n`);
-}
+// Prompts left open on a mission that already finished can never be answered
+// either, so they are closed regardless of what happens to the live ones.
+reconcileOrphans(getDatabase());
+
+// Missions interrupted by the last restart come back where they can, rather
+// than being lost to a deploy.
+void recoverMissions().then(({ resumed, stopped }) => {
+  if (resumed > 0 || stopped > 0) {
+    process.stdout.write(`agentd: resumed ${resumed}, stopped ${stopped}\n`);
+  }
+});
 
 const server = createServer((request, response) => {
   handle(request, response).catch((error: unknown) => {
