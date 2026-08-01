@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { createSandbox, type Sandbox } from "./test-support/sandbox";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createWorktree,
@@ -21,20 +21,15 @@ let env: { workspaceRoot: string };
 const FULL_NAME = "acme/widget";
 const MISSION = "11111111-2222-3333-4444-555555555555";
 
+let sandbox: Sandbox;
+
 function git(cwd: string, ...args: string[]) {
-  execFileSync("git", args, {
-    cwd,
-    stdio: "pipe",
-    env: {
-      ...process.env,
-      GIT_CONFIG_GLOBAL: "/dev/null",
-      GIT_CONFIG_SYSTEM: "/dev/null",
-    },
-  });
+  sandbox.git(cwd, ...args);
 }
 
 beforeEach(() => {
-  root = mkdtempSync(path.join(tmpdir(), "git-"));
+  sandbox = createSandbox("git-");
+  root = sandbox.root;
   origin = path.join(root, "origin");
   mkdirSync(origin, { recursive: true });
 
@@ -49,7 +44,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  sandbox.cleanup();
 });
 
 async function clone() {
