@@ -44,7 +44,10 @@ jobs:
         with:
           # Only the secret history scan reads past the tip; every other check
           # works on the tree it is given.
-          fetch-depth: ${{ matrix.check.requires == 'gitleaks' && 0 || 1 }}
+          # Quoted deliberately: a bare 0 is falsy in an Actions expression, so
+          # `&& 0 || 1` yields 1 in both branches and the clone stays shallow —
+          # which is how a history scan came to scan one commit.
+          fetch-depth: ${{ matrix.check.requires == 'gitleaks' && '0' || '1' }}
       - uses: actions/setup-node@v7
         with:
           node-version: 22
