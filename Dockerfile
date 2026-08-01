@@ -17,6 +17,17 @@ COPY apps/web/package.json ./apps/web/
 COPY apps/agentd/package.json ./apps/agentd/
 RUN npm ci
 
+# The runtime gets its own install with no dev dependencies. Copying the build
+# stage's node_modules shipped esbuild's native binary into the image an
+# operator runs — build tooling, carrying its own CVEs, in production.
+FROM deps AS prod-deps
+WORKDIR /app
+# Pruned rather than reinstalled: a fresh `npm ci --omit=dev` would rerun the
+# prepare script, which is husky and is itself a dev dependency, and would
+# rebuild better-sqlite3 from source for no reason. --ignore-scripts because
+# pruning has no need to run any.
+RUN npm prune --omit=dev --ignore-scripts
+
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -41,7 +52,7 @@ ENV NODE_ENV=production \
     # look for migrations inside apps/web and find nothing.
     MIGRATIONS_DIR=/app/drizzle
 
-ARG GH_VERSION=2.96.0
+ARG GH_VERSION=2.97.0
 ARG TARGETARCH
 
 # git is the product; gh opens the pull requests; openssh for key-based pushes.
@@ -55,6 +66,7 @@ RUN apt-get update \
  && rm -f /tmp/gh.deb \
  && apt-get purge -y curl && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/* \
+ && npm install -g npm@latest \
  && npm install -g @anthropic-ai/claude-code \
  && npm cache clean --force \
  && useradd --system --create-home --uid 10001 agent \
@@ -64,7 +76,7 @@ RUN apt-get update \
 # --chown sets ownership as files are written. A `chown -R` afterwards would
 # copy every file up into a new overlay layer — on node_modules that is tens of
 # thousands of files, which doubles the image and stalls the build on I/O.
-COPY --from=deps --chown=agent:agent /app/node_modules ./node_modules
+COPY --from=prod-deps --chown=agent:agent /app/node_modules ./node_modules
 COPY --from=build --chown=agent:agent /app/apps/web/.next ./apps/web/.next
 # Each directory needs its own COPY: with several sources, COPY flattens
 # directory *contents* into the destination, so `drizzle` would land as loose
