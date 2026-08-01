@@ -59,6 +59,13 @@
     "name": "Deep scan (secrets, IaC)",
     "command": "trivy fs --scanners secret,misconfig --severity HIGH,CRITICAL --exit-code 1 --quiet .",
     "requires": "trivy",
-    "installHint": "brew install trivy \u2014 or skip it locally; CI runs it on every push"
+    "installHint": "brew install trivy — or skip it locally; CI runs it on every push"
+  },
+  {
+    "id": "secret-history",
+    "name": "Secret history scan",
+    "command": "gitleaks git . --redact --no-banner --exit-code 1",
+    "requires": "gitleaks",
+    "installHint": "brew install gitleaks — or skip it locally; CI runs it on every push"
   }
 ]

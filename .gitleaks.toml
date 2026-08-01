@@ -1,0 +1,19 @@
+[extend]
+useDefault = true
+
+# `.env.example` is the configuration contract: every key is present with an
+# empty value and a comment explaining it. The generic-api-key rule matches the
+# prose — "paste an API key:" — and not a value, and the commit it matches is in
+# history, so rewording the file today would not clear it.
+#
+# Deliberately narrow: this allows one sentence in one file. A real value pasted
+# into `.env.example` still fails, because the allowlist requires both the path
+# and this wording to match.
+[[allowlists]]
+description = "Documentation prose in the configuration contract"
+condition = "AND"
+# Without this the regex is matched against the extracted secret; the wording
+# that proves this is prose lives in the surrounding line.
+regexTarget = "line"
+paths = ['''^\.env\.example$''']
+regexes = ['''(?i)paste an api key''']
