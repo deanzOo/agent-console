@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { TranscriptGroup, TranscriptItem } from "@agent-console/core/transcript";
+import type { Aside, TranscriptRow as Row } from "@agent-console/core/transcript";
 
 // Long tool output pushes everything else off a phone screen, so it is clipped
 // until asked for. The number is lines, not characters: a wide line is one line.
@@ -59,22 +59,28 @@ function Raw({ value }: { value: unknown }) {
   );
 }
 
-/** A run of hidden events as one line: "agent.system (164)", still openable. */
-function Collapsed({ label, items }: { label: string; items: TranscriptItem[] }) {
+/** A run of hidden events as a chip beside the entry it followed. */
+function AsideChip({ aside }: { aside: Aside }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <li className="text-[11px] text-neutral-400">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="underline">
-        {label}
-        {items.length > 1 ? ` (${items.length})` : ""}
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="ml-1 rounded bg-neutral-100 px-1 text-[10px] text-neutral-400 dark:bg-neutral-900"
+      >
+        {aside.label.replace(/^(agent|mission)\./, "")}
+        {aside.items.length > 1 ? ` ${aside.items.length}` : ""}
       </button>
       {open && (
-        <pre className="mt-1 max-h-64 overflow-auto rounded bg-black/5 p-2 break-words whitespace-pre-wrap dark:bg-white/5">
-          {items.map((item) => JSON.stringify(item.raw, null, 2)).join("\n\n")}
+        <pre className="clear-both mt-1 max-h-64 overflow-auto rounded bg-black/5 p-2 text-[11px] break-words whitespace-pre-wrap dark:bg-white/5">
+          {aside.items
+            .map((item) => JSON.stringify(item.raw, null, 2))
+            .join(String.fromCharCode(10, 10))}
         </pre>
       )}
-    </li>
+    </>
   );
 }
 
@@ -137,12 +143,20 @@ function Edit({
   );
 }
 
-function Entry({ item }: { item: TranscriptItem }) {
+export function TranscriptRow({ row }: { row: Row }) {
+  const { item, aside } = row;
   const { entry } = item;
 
   return (
     <li className="text-sm">
-      <Raw value={item.raw} />
+      {/* Everything that is not the conversation lives on this line, floated
+          right: the noise costs no vertical space and stays one tap away. */}
+      <span className="float-right ml-2 flex flex-wrap items-start justify-end gap-0.5">
+        {aside.map((group, index) => (
+          <AsideChip key={`${group.label}-${index}`} aside={group} />
+        ))}
+        <Raw value={item.raw} />
+      </span>
 
       {entry.kind === "said" && (
         <div
@@ -209,13 +223,5 @@ function Entry({ item }: { item: TranscriptItem }) {
         <p className="text-[11px] text-neutral-400">{entry.text}</p>
       )}
     </li>
-  );
-}
-
-export function TranscriptRow({ group }: { group: TranscriptGroup }) {
-  return group.kind === "collapsed" ? (
-    <Collapsed label={group.label} items={group.items} />
-  ) : (
-    <Entry item={group.item} />
   );
 }

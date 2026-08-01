@@ -122,11 +122,8 @@ export function MissionLive({
       </header>
 
       <ol className="space-y-3">
-        {groupTranscript(toTranscript(events)).map((group) => (
-          <TranscriptRow
-            key={group.kind === "collapsed" ? group.items[0]?.seq : group.item.seq}
-            group={group}
-          />
+        {groupTranscript(toTranscript(events)).map((row) => (
+          <TranscriptRow key={row.item.seq} row={row} />
         ))}
       </ol>
       <div ref={bottom} />

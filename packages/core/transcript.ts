@@ -218,42 +218,57 @@ export function summarise(event: StoredEvent): TranscriptEntry {
   }
 }
 
-export type TranscriptGroup =
-  | { readonly kind: "entry"; readonly item: TranscriptItem }
-  /** A run of hidden events, folded into one line with a count. */
-  | {
-      readonly kind: "collapsed";
-      readonly label: string;
-      readonly items: TranscriptItem[];
-    };
+export interface Aside {
+  readonly label: string;
+  readonly items: TranscriptItem[];
+}
+
+export interface TranscriptRow {
+  readonly item: TranscriptItem;
+  /** Hidden runs that happened around this entry, shown beside it. */
+  readonly aside: Aside[];
+}
 
 /**
- * Folds consecutive hidden events into a single line.
+ * Turns a stream of events into rows of things the agent actually did, with
+ * everything else tucked alongside.
  *
- * One real mission produced 164 `agent.system` events. Even as one-line
- * placeholders that is 164 rows to scroll past, so a run of them becomes
- * "agent.system (164)" — one row, still openable.
+ * Hidden events used to get a line each. One real mission produced 164
+ * `agent.system` events, so even as one-line placeholders that was 164 rows to
+ * scroll past. They now hang off the entry they followed, folded by type and
+ * counted, so the column reads as a conversation and nothing is lost.
  */
-export function groupTranscript(items: readonly TranscriptItem[]): TranscriptGroup[] {
-  const groups: TranscriptGroup[] = [];
+export function groupTranscript(items: readonly TranscriptItem[]): TranscriptRow[] {
+  const rows: TranscriptRow[] = [];
+  let pending: Aside[] = [];
+
+  const fold = (item: TranscriptItem) => {
+    const last = pending.at(-1);
+    // Only a run of the same type folds: "agent.system (3)" says something,
+    // "hidden (3)" of three different kinds says nothing.
+    if (last && last.label === item.type) last.items.push(item);
+    else pending.push({ label: item.type, items: [item] });
+  };
 
   for (const item of items) {
-    if (item.entry.kind !== "hidden") {
-      groups.push({ kind: "entry", item });
+    if (item.entry.kind === "hidden") {
+      fold(item);
       continue;
     }
 
-    const last = groups.at(-1);
-    // Only a run of the *same* type folds together: "agent.system (3)" says
-    // something, "hidden (3)" of three different kinds says nothing.
-    if (last?.kind === "collapsed" && last.label === item.type) {
-      last.items.push(item);
-      continue;
-    }
-    groups.push({ kind: "collapsed", label: item.type, items: [item] });
+    const previous = rows.at(-1);
+    // Anything before the first visible entry hangs off that entry instead,
+    // rather than opening the transcript with a row of noise.
+    if (previous) previous.aside.push(...pending);
+    rows.push({ item, aside: previous ? [] : pending });
+    pending = [];
   }
 
-  return groups;
+  // Whatever trailed the last entry belongs to it.
+  const last = rows.at(-1);
+  if (last) last.aside.push(...pending);
+
+  return rows;
 }
 
 export function toTranscript(events: readonly StoredEvent[]): TranscriptItem[] {

@@ -194,99 +194,56 @@ describe("groupTranscript", () => {
     });
   const system = (seq: number) => item(seq, "agent.system", { subtype: "init" });
 
-  it("leaves visible entries alone", () => {
-    const groups = groupTranscript([said(1), said(2)]);
-    expect(groups.map((g) => g.kind)).toEqual(["entry", "entry"]);
+  it("makes one row per thing the agent actually did", () => {
+    expect(groupTranscript([said(1), said(2)])).toHaveLength(2);
   });
 
   // 164 one-line placeholders is still 164 rows to scroll past.
-  it("folds a run of hidden events into one line with a count", () => {
-    const groups = groupTranscript([system(1), system(2), system(3)]);
+  it("hangs hidden events off the entry they followed", () => {
+    const rows = groupTranscript([said(1), system(2), system(3)]);
 
-    expect(groups).toHaveLength(1);
-    expect(groups[0]).toMatchObject({ kind: "collapsed", label: "agent.system" });
-    expect(groups[0]?.kind === "collapsed" && groups[0].items).toHaveLength(3);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.aside).toEqual([
+      { label: "agent.system", items: [expect.anything(), expect.anything()] },
+    ]);
   });
 
-  it("does not fold across a visible entry", () => {
-    const groups = groupTranscript([system(1), said(2), system(3)]);
-    expect(groups.map((g) => g.kind)).toEqual(["collapsed", "entry", "collapsed"]);
+  it("folds a run by type and keeps every item", () => {
+    const rows = groupTranscript([said(1), system(2), system(3), system(4)]);
+    expect(rows[0]?.aside[0]?.items.map((i) => i.seq)).toEqual([2, 3, 4]);
   });
 
-  // "agent.system (3)" says something; "hidden (3)" of three different kinds
-  // says nothing.
   it("only folds runs of the same type", () => {
     const rate = item(9, "agent.rate_limit_event", {});
-    const groups = groupTranscript([system(1), rate, system(3)]);
-    expect(groups).toHaveLength(3);
+    const rows = groupTranscript([said(1), system(2), rate, system(4)]);
+    expect(rows[0]?.aside.map((a) => a.label)).toEqual([
+      "agent.system",
+      "agent.rate_limit_event",
+      "agent.system",
+    ]);
   });
 
-  it("keeps every underlying item, so nothing is lost", () => {
-    const groups = groupTranscript([system(1), system(2)]);
-    const kept = groups.flatMap((g) => (g.kind === "collapsed" ? g.items : [g.item]));
-    expect(kept.map((i) => i.seq)).toEqual([1, 2]);
-  });
-});
+  // Opening a transcript with a row of noise is the thing being avoided.
+  it("attaches leading hidden events to the first entry", () => {
+    const rows = groupTranscript([system(1), said(2)]);
 
-describe("edits", () => {
-  function edit(name: string, input: unknown) {
-    return summarise(
-      event("agent.assistant", {
-        message: { content: [{ type: "tool_use", name, input }] },
-      }),
-    );
-  }
-
-  it("reads an Edit as the lines that go and the lines that arrive", () => {
-    expect(
-      edit("Edit", {
-        file_path: "/app/x.ts",
-        old_string: "const a = 1;\nconst b = 2;",
-        new_string: "const a = 1;\nconst b = 3;\nconst c = 4;",
-      }),
-    ).toEqual({
-      kind: "edit",
-      path: "/app/x.ts",
-      removed: ["const a = 1;", "const b = 2;"],
-      added: ["const a = 1;", "const b = 3;", "const c = 4;"],
-    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.item.seq).toBe(2);
+    expect(rows[0]?.aside[0]?.label).toBe("agent.system");
   });
 
-  // An empty string is no lines, not one blank one, or every insertion reports
-  // a removal it did not make.
-  it("counts an insertion as adding only", () => {
-    const result = edit("Edit", { file_path: "/a", old_string: "", new_string: "new" });
-    expect(result).toMatchObject({ removed: [], added: ["new"] });
+  it("gives trailing hidden events to the last entry", () => {
+    const rows = groupTranscript([said(1), said(2), system(3)]);
+    expect(rows[1]?.aside[0]?.items.map((i) => i.seq)).toEqual([3]);
   });
 
-  it("treats a Write as all additions, since it replaces the file", () => {
-    expect(edit("Write", { file_path: "/a", content: "one\ntwo" })).toMatchObject({
-      removed: [],
-      added: ["one", "two"],
-    });
-  });
-
-  it("sums every hunk of a MultiEdit", () => {
-    expect(
-      edit("MultiEdit", {
-        file_path: "/a",
-        edits: [
-          { old_string: "x", new_string: "y" },
-          { old_string: "p\nq", new_string: "r" },
-        ],
-      }),
-    ).toMatchObject({ removed: ["x", "p", "q"], added: ["y", "r"] });
-  });
-
-  it("falls back to a plain tool line when there is nothing to diff", () => {
-    expect(edit("Edit", { file_path: "/a" }).kind).toBe("tool");
-  });
-
-  it("leaves other tools alone", () => {
-    expect(edit("Bash", { command: "ls" })).toEqual({
-      kind: "tool",
-      name: "Bash",
-      summary: "ls",
-    });
+  it("loses nothing", () => {
+    const items = [system(1), said(2), system(3), said(4), system(5)];
+    const rows = groupTranscript(items);
+    const seen = rows.flatMap((row) => [
+      row.item.seq,
+      ...row.aside.flatMap((a) => a.items.map((i) => i.seq)),
+    ]);
+    expect(seen.sort()).toEqual([1, 2, 3, 4, 5]);
   });
 });

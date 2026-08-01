@@ -8,8 +8,11 @@ import {
   setStatus,
   type MissionSource,
 } from "../missions";
+import { MISSION_STATUS } from "../schema";
 import { branchNameFor } from "../repos";
 import { createWorktree, defaultBranch, ensureBareClone } from "../git";
+import { closeOpenPrompts } from "./orphans";
+import { planRecovery } from "./recover";
 import { createSdkDriver } from "./driver";
 import { MissionSession } from "./session";
 import { createMission } from "../missions";
@@ -109,6 +112,52 @@ async function prepareWorkspace(
 
   recordWorkspace(db, missionId, { branch, worktreePath });
   return worktreePath;
+}
+
+/**
+ * Brings back missions whose session died with the process, and gives up on the
+ * rest with a reason.
+ *
+ * Called at startup, where the registry is empty by definition: anything the
+ * database still calls live is a leftover.
+ */
+export async function recoverMissions(): Promise<{ resumed: number; stopped: number }> {
+  const db = getDatabase();
+  const config = getConfig();
+  let resumed = 0;
+  let stopped = 0;
+
+  for (const plan of planRecovery(db)) {
+    const { mission } = plan;
+
+    if (plan.action === "stop") {
+      closeOpenPrompts(db, mission.id);
+      setStatus(db, mission.id, MISSION_STATUS.STOPPED);
+      appendEvent(db, mission.id, "mission.status", {
+        status: MISSION_STATUS.STOPPED,
+        error: `The session host restarted and this mission was not resumed: ${plan.reason}.`,
+      });
+      stopped += 1;
+      continue;
+    }
+
+    // The approval it was parked on died with the process, so it is closed and
+    // the agent asks again. Seeing the same request twice beats losing the work.
+    closeOpenPrompts(db, mission.id);
+    appendEvent(db, mission.id, "mission.resumed", { sessionId: mission.sessionId });
+
+    const session = new MissionSession(db, mission.id);
+    sessions.set(mission.id, session);
+    session.start(createSdkDriver(), {
+      missionId: mission.id,
+      prompt: "Continue where you left off.",
+      cwd: mission.worktreePath || config.workspaceRoot,
+      resume: mission.sessionId ?? undefined,
+    });
+    resumed += 1;
+  }
+
+  return { resumed, stopped };
 }
 
 export async function stopMission(missionId: string): Promise<void> {
