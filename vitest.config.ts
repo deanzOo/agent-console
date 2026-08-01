@@ -8,7 +8,9 @@ export default defineConfig({
     exclude: ["node_modules/**", ".next/**"],
     coverage: {
       provider: "v8",
-      reporter: ["text-summary", "lcov"],
+      // json-summary is what the pull request comment reads to report coverage
+      // for the files a change actually touches.
+      reporter: ["text-summary", "lcov", "json-summary"],
       // Only logic-bearing code is measured. Pages and layouts are markup and
       // are covered by manual/integration checks instead.
       //

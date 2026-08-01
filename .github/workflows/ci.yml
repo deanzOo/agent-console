@@ -76,6 +76,16 @@ jobs:
       - name: ${{ matrix.check.name }}
         run: ${{ matrix.check.command }}
 
+      # Read by the summary job, so the suite runs once rather than again just
+      # to report on itself.
+      - name: Keep the coverage summary
+        if: matrix.check.id == 'tests'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-summary
+          path: coverage/coverage-summary.json
+          retention-days: 7
+
   # Needs the pull request's commit range, which does not exist locally.
   commits:
     timeout-minutes: 10
@@ -114,6 +124,75 @@ jobs:
           # Copyleft licences would change what a peer cloning this is allowed
           # to do with it, which is a decision rather than an oversight.
           deny-licenses: AGPL-3.0, GPL-3.0, LGPL-3.0
+
+  # What a reviewer wants before reading a line: how much moved, whether tests
+  # came with it, and whether any file it touches is unreached by them.
+  summary:
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The summary is a diff against the base, which a shallow clone
+          # cannot compute.
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        continue-on-error: true
+        with:
+          name: coverage-summary
+          path: coverage
+
+      - name: Build the summary
+        id: summary
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          {
+            echo 'body<<PR_SUMMARY_EOF'
+            git diff --numstat "$BASE...HEAD" \
+              | node scripts/pr-summary.mjs --coverage coverage/coverage-summary.json
+            echo 'PR_SUMMARY_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      # Always written, including for a pull request from a fork, where posting
+      # a comment is impossible. The summary is still one click away in the run.
+      - name: Show it in the run
+        env:
+          BODY: ${{ steps.summary.outputs.body }}
+        run: printf '## PR summary\n\n%s\n' "$BODY" >> "$GITHUB_STEP_SUMMARY"
+
+      # Edited in place rather than appended: a new comment on every push turns
+      # a busy pull request into a wall of stale summaries.
+      #
+      # Skipped for a fork, where GITHUB_TOKEN is read-only however the workflow
+      # declares its permissions - without this every outside contributor's pull
+      # request fails a job they cannot fix.
+      - name: Post it
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          BODY: ${{ steps.summary.outputs.body }}
+          MARKER: "<!-- pr-summary -->"
+        run: |
+          printf '%s\n\n%s\n' "$MARKER" "$BODY" > comment.md
+          existing=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" \
+            --jq "map(select(.body | startswith(\"$MARKER\"))) | .[0].id // empty")
+          if [ -n "$existing" ]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" \
+              -F body=@comment.md > /dev/null
+          else
+            gh pr comment "$PR" --body-file comment.md > /dev/null
+          fi
 
   # Green only when every matrix leg is. This is the single required status
   # check to select in branch protection — a new check in the manifest is then
