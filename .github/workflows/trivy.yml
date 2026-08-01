@@ -56,3 +56,48 @@ jobs:
         uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
         with:
           sarif_file: trivy-results.sarif
+
+  # The image is otherwise built for the first time on the operator's server, so
+  # a broken Dockerfile surfaces at deploy. Building it here also makes the base
+  # image scannable: its OS packages are invisible to a filesystem scan of the
+  # source tree, and they are the ones nobody bumps.
+  image:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Build the image
+        run: docker build -t agent-console:ci .
+
+      - name: Trivy (image gate)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: agent-console:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+          # Not found on its own; naming it is what makes the one documented,
+          # dated exception apply.
+          trivyignores: .trivyignore.yaml
+
+      # What is actually inside the thing an operator runs, so a future CVE can
+      # be answered from the release rather than by guessing.
+      - name: Build an SBOM
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: agent-console:ci
+          format: cyclonedx
+          output: sbom.cdx.json
+
+      - name: Keep the SBOM
+        if: always() && hashFiles('sbom.cdx.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom
+          path: sbom.cdx.json
+          retention-days: 90

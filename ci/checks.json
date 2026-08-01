@@ -55,6 +55,11 @@
     "command": "bash scripts/check-no-hardcoded-config.sh"
   },
   {
+    "id": "signatures",
+    "name": "Registry signatures",
+    "command": "npm audit signatures"
+  },
+  {
     "id": "vulnerabilities",
     "name": "Deep scan (secrets, IaC)",
     "command": "trivy fs --scanners secret,misconfig --severity HIGH,CRITICAL --exit-code 1 --quiet .",
