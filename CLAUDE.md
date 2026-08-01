@@ -31,7 +31,8 @@ The loop:
 
 Applies to every feature and every bugfix. A bugfix starts with a test that reproduces the bug.
 
-Coverage thresholds (90% lines/functions/statements, 85% branches on `lib/`, `config/`, `middleware.ts`) are
+Coverage thresholds (93% lines, 92% functions and statements, 86% branches across `packages/core`, the
+route handlers and `apps/web/lib`) are
 a **backstop**, not the rule. Coverage cannot tell whether a test was written first. Hitting the number with
 tests bolted on afterwards is a violation even though CI is green.
 

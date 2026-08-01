@@ -6,7 +6,11 @@
  * permission mode means: setting a mode the hook ignores changes nothing, which
  * is exactly how "auto edits" came to ask about everything anyway.
  */
-export type ApprovalMode = "default" | "acceptEdits" | "plan";
+// bypassPermissions is deliberately absent: it would make an approval console
+// pointless, and the agent has a shell in a container holding a git token.
+export const APPROVAL_MODES = ["default", "acceptEdits", "plan"] as const;
+
+export type ApprovalMode = (typeof APPROVAL_MODES)[number];
 
 // Reading and inspecting cannot surprise the operator, and stopping for
 // permission on every grep would make the console unusable.

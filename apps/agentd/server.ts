@@ -13,7 +13,11 @@ import type { StoredEvent } from "@agent-console/core/missions";
 import { reconcileOrphans } from "@agent-console/core/agents/orphans";
 import { recoverMissions } from "@agent-console/core/agents/manager";
 import { formatSseEvent, HEARTBEAT_MS, parseSince } from "@agent-console/core/sse";
-import { answerPromptSchema, launchMissionSchema } from "@agent-console/core/protocol";
+import {
+  answerPromptSchema,
+  launchMissionSchema,
+  setModeSchema,
+} from "@agent-console/core/protocol";
 import { matchRoute } from "./routes";
 
 // A transcript stream never ends on its own, so server.close() would wait for
@@ -26,10 +30,6 @@ const openStreams = new Set<() => void>();
 const MALFORMED = Symbol("malformed-json");
 
 const saySchema = z.object({ text: z.string().trim().min(1).max(10_000) });
-
-// bypassPermissions is deliberately absent: it would make an approval console
-// pointless, and the agent has a shell in a container holding a git token.
-const modeSchema = z.object({ mode: z.enum(["default", "acceptEdits", "plan"]) });
 
 const MAX_BODY_BYTES = 1_000_000;
 
@@ -214,7 +214,7 @@ async function handle(
 
   if (route.action === "mode") {
     const body = await readJson(request);
-    const parsed = body === MALFORMED ? undefined : modeSchema.safeParse(body);
+    const parsed = body === MALFORMED ? undefined : setModeSchema.safeParse(body);
     if (!parsed?.success) {
       json(response, 400, { error: "invalid_mode" });
       return;
