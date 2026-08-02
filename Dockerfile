@@ -34,8 +34,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Boot-time config is absent during build; these satisfy the parser only.
-RUN AUTH_MODE=trusted-network npm run build \
- && npm run build -w @agent-console/agentd
+# turbo.json owns the web/agentd build order, so there is nothing to chain here.
+RUN AUTH_MODE=trusted-network npm run build
 
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
