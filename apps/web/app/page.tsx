@@ -8,10 +8,12 @@ import {
 } from "@agent-console/core/missions";
 import { MISSION_STATUSES } from "@agent-console/core/schema";
 import { isSetupComplete } from "@agent-console/core/settings";
+import { readTelemetry } from "@/lib/telemetry";
 import { ArchiveButton } from "./archive-button";
 import { FilterBar } from "./filter-bar";
 import { MissionTabs } from "./mission-tabs";
 import { NewMissionForm } from "./new-mission-form";
+import { TelemetryPanel } from "./telemetry-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +64,7 @@ export default async function Dashboard({
     },
   ];
   const waiting = countAwaitingInput(db);
+  const telemetry = readTelemetry(db);
 
   return (
     <main className="space-y-6">
@@ -73,6 +76,8 @@ export default async function Dashboard({
           </span>
         )}
       </header>
+
+      <TelemetryPanel initial={telemetry} />
 
       <NewMissionForm />
 

@@ -24,6 +24,7 @@ export interface AppConfig {
   readonly hasAnthropicCredential: boolean;
   readonly githubToken: string | undefined;
   readonly asanaToken: string | undefined;
+  readonly hostProcPath: string;
 }
 
 /**
@@ -67,6 +68,7 @@ const schema = z.object({
   ),
   GITHUB_TOKEN: blankAsUndefined,
   ASANA_TOKEN: blankAsUndefined,
+  HOST_PROC_PATH: blankAsUndefined,
 });
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
@@ -160,6 +162,7 @@ export function parseEnv(
     ),
     githubToken: env.GITHUB_TOKEN,
     asanaToken: env.ASANA_TOKEN,
+    hostProcPath: env.HOST_PROC_PATH ?? "/proc",
   };
 }
 

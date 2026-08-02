@@ -41,6 +41,17 @@ describe("parseEnv", () => {
       expect(parse().port).toBe(3000);
       expect(parse().host).toBe("127.0.0.1");
     });
+
+    // Right for a bare-metal or systemd install, where this process's /proc
+    // already is the host's. Docker needs an explicit override — see
+    // .env.example.
+    it("defaults HOST_PROC_PATH to /proc", () => {
+      expect(parse().hostProcPath).toBe("/proc");
+    });
+
+    it("reads an explicit HOST_PROC_PATH", () => {
+      expect(parse({ HOST_PROC_PATH: "/host/proc" }).hostProcPath).toBe("/host/proc");
+    });
   });
 
   describe("validation", () => {

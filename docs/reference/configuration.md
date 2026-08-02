@@ -45,6 +45,12 @@ An Anthropic credential is required for anything to run. Preferred is `CLAUDE_CO
 | `DATA_DIR`       | `~/.claudevps`    | Holds `data.db`, created `chmod 600`.                                                                           |
 | `WORKSPACE_ROOT` | `<DATA_DIR>/work` | Bare clones and per-mission worktrees. Grows with concurrent missions; point at a larger disk if repos are big. |
 
+## Host telemetry
+
+| Key              | Default | Notes                                                                                                                                                                                                                                                                                |
+| ---------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `HOST_PROC_PATH` | `/proc` | Where the dashboard reads CPU load, memory, network and disk numbers from. Right by default outside Docker. In Docker, bind-mount the host's `/proc` elsewhere in the container and point this at it, or the network and disk numbers are the container's own rather than the box's. |
+
 ## Optional integrations
 
 Absent credentials hide the feature rather than breaking it.
