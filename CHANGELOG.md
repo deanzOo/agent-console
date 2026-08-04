@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.0](https://github.com/deanzOo/agent-console/compare/v0.2.0...v0.3.0) (2026-08-04)
+
+
+### Features
+
+* show host CPU/memory/network/disk load beside missions running ([#79](https://github.com/deanzOo/agent-console/issues/79)) ([c99e8ca](https://github.com/deanzOo/agent-console/commit/c99e8caf0bf000c255b40da7b94e1426d708a4c7)), closes [#55](https://github.com/deanzOo/agent-console/issues/55)
+* **ui:** show what mission worktrees are costing on disk ([#78](https://github.com/deanzOo/agent-console/issues/78)) ([0d3c559](https://github.com/deanzOo/agent-console/commit/0d3c55920ef848a4f0137b8247ae1de70a448bc7))
+
+
+### Bug Fixes
+
+* **deps:** clear the qs advisory ([#92](https://github.com/deanzOo/agent-console/issues/92)) ([6fd6b0d](https://github.com/deanzOo/agent-console/commit/6fd6b0d101c6a66a4d8a8290a07312c03f76cbe5))
+* **deps:** let dependabot propose majors at all ([#85](https://github.com/deanzOo/agent-console/issues/85)) ([f0bed1e](https://github.com/deanzOo/agent-console/commit/f0bed1e0dd6d6489d7151e49badc2eee5f57d8cd))
+* **deps:** pin past two high advisories in transitive dependencies ([#83](https://github.com/deanzOo/agent-console/issues/83)) ([7fdec56](https://github.com/deanzOo/agent-console/commit/7fdec5647abb1a1e1c4e65155d81e437c0221513))
+
+
+### Documentation
+
+* correct what the docs claim, and cover what shipped since ([#69](https://github.com/deanzOo/agent-console/issues/69)) ([8d49383](https://github.com/deanzOo/agent-console/commit/8d49383fbad853def495d50593e4b2148b3976d7))
+
 ## [0.2.0](https://github.com/deanzOo/agent-console/compare/v0.1.0...v0.2.0) (2026-08-01)
 
 
