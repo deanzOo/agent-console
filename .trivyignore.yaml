@@ -1,12 +1,22 @@
-# Surfaced deliberately rather than silently: this is npm's own bundled copy,
-# inside the Node base image, and no published npm carries the fixed version
-# yet. Nothing in this repository can move it, and removing npm from the image
-# would take away what agents use to run the projects they work on.
+# Surfaced deliberately rather than silently: these are npm's own bundled copy of
+# brace-expansion, inside the Node base image. The image already installs
+# npm@latest at build time, so if a published npm carried the fix this would not
+# appear — nothing in this repository can move it, and removing npm would take
+# away what agents use to run the projects they work on.
 #
-# The date is the point of it: this stops being ignored on its own, so it comes
-# back as a failure if npm has not shipped the fix by then.
+# The date is the point of it: these stop being ignored on their own, so they
+# come back as failures if npm has not shipped the fix by then.
+#
+# This is the second advisory on the same file. A third means the approach is
+# wrong rather than the timing — see the tracking issue, which weighs skipping
+# npm's bundle wholesale against dropping npm from the runtime image.
 vulnerabilities:
   - id: CVE-2026-14257
+    paths:
+      - "usr/local/lib/node_modules/npm/node_modules/brace-expansion/package.json"
+    statement: "brace-expansion inside npm's own bundle; fix not yet in any published npm"
+    expired_at: 2026-09-15
+  - id: CVE-2026-69152
     paths:
       - "usr/local/lib/node_modules/npm/node_modules/brace-expansion/package.json"
     statement: "brace-expansion inside npm's own bundle; fix not yet in any published npm"
