@@ -79,9 +79,16 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
           format: table
-          # Not found on its own; naming it is what makes the one documented,
-          # dated exception apply.
-          trivyignores: .trivyignore.yaml
+          # npm's own bundled dependencies, which this repository cannot patch.
+          # Three advisories landed here in four days - two on the same file -
+          # and each needed its own dated exception, which is a treadmill rather
+          # than a decision. The image already installs npm@latest at build, so
+          # these are fixed by upgrading npm and by nothing else we can do.
+          #
+          # Deliberately narrow: /app/node_modules is still scanned, and so is
+          # every OS package. What is skipped is the copy npm ships inside
+          # itself.
+          skip-dirs: usr/local/lib/node_modules/npm
 
       # What is actually inside the thing an operator runs, so a future CVE can
       # be answered from the release rather than by guessing.

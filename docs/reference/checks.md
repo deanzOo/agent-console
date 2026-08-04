@@ -38,6 +38,13 @@ value that looks secret.
 someone can get to first — as a symlink pointing wherever they like, which the write then follows.
 `mkdtempSync` returns a directory nobody can guess. CodeQL finds this too, but only after a push.
 
+**The image scan skips npm's own bundle.** Three advisories landed there in four
+days, two of them on the same file, and each needed its own dated exception. The
+image already installs `npm@latest` at build, so those are fixed by upgrading npm
+and by nothing else this repository can do. `/app/node_modules` and every OS
+package are still scanned — verified by comparing both ways: the application's
+own findings were unchanged and only npm's bundle disappeared.
+
 **Every action is pinned by commit SHA.** A tag is mutable: whoever takes over a maintainer account can
 re-point `v7` at their own commit, which then runs here holding this repository's token. Dependabot updates a
 digest as readily as a tag.
