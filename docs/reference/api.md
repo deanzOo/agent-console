@@ -52,20 +52,26 @@ are read by the console: two processes, one database file, and only one place th
 
 ## Everything else
 
-| Route                            | Method | Body                 | Answers                                |
-| -------------------------------- | ------ | -------------------- | -------------------------------------- |
-| `/api/login`                     | POST   | `{ password }`       | `{ ok }` plus the session cookie       |
-| `/api/setup`                     | GET    | —                    | The wizard's state                     |
-| `/api/setup`                     | POST   | `{ step, … }`        | `{ ok }`                               |
-| `/api/sync`                      | POST   | —                    | `{ issues?, repos?, tasks?, …Error? }` |
-| `/api/push`                      | GET    | —                    | `{ publicKey }`                        |
-| `/api/push`                      | POST   | `{ endpoint, keys }` | `201 { ok }`                           |
-| `/api/disk-usage/orphans/[name]` | DELETE | —                    | `{ ok }`                               |
+| Route                            | Method | Body                 | Answers                                  |
+| -------------------------------- | ------ | -------------------- | ---------------------------------------- |
+| `/api/login`                     | POST   | `{ password }`       | `{ ok }` plus the session cookie         |
+| `/api/setup`                     | GET    | —                    | The wizard's state                       |
+| `/api/setup`                     | POST   | `{ step, … }`        | `{ ok }`                                 |
+| `/api/sync`                      | POST   | —                    | `{ issues?, repos?, tasks?, …Error? }`   |
+| `/api/push`                      | GET    | —                    | `{ publicKey }`                          |
+| `/api/push`                      | POST   | `{ endpoint, keys }` | `201 { ok }`                             |
+| `/api/disk-usage/orphans/[name]` | DELETE | —                    | `{ ok }`                                 |
+| `/api/telemetry`                 | GET    | —                    | `{ available, host?, missionsRunning? }` |
 
 `disk-usage/orphans/[name]` deletes a tree under `wt/` with no mission row behind it — the counterpart to
 `workspace` for a mission's own tree, needed because an orphan has no mission status to refuse against. `name`
 is checked against a plain allowlist rather than resolved as a path, so a traversal attempt is refused outright
 rather than relying on catching it after normalising.
+
+`/api/telemetry` answers `{ available: false }` when `/proc` cannot be read — a developer machine, or a
+container without it — rather than an error. When available, `host` carries CPU load (1/5/15 minute averages
+plus core count), memory and swap use, and network/disk throughput. The first reading after the process starts
+has no `network` or `disk`: both are rates, and there is nothing yet to compare against.
 
 `/api/login` exists only when `AUTH_MODE=password`; otherwise it is 404. A wrong password and an instance with
 no password set answer identically, so an unauthenticated caller learns nothing about the deployment.

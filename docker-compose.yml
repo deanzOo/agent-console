@@ -22,6 +22,10 @@ services:
       # instead — and note macOS keeps that credential in the Keychain, not on
       # disk, so the mount carries nothing there.
       # - ${CLAUDE_CONFIG_DIR:-~/.claude}:/home/agent/.claude
+      # Uncomment to read the host's CPU/memory/network/disk numbers instead
+      # of the container's own, and set HOST_PROC_PATH=/host/proc in .env to
+      # match.
+      # - /proc:/host/proc:ro
     # The healthcheck is defined on the image, so compose inherits it. Repeating
     # it here would be a second copy of the same probe, free to drift.
 

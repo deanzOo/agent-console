@@ -22,4 +22,9 @@ describe("formatBytes", () => {
   it("does not climb past terabytes", () => {
     expect(formatBytes(1024 ** 5)).toBe("1024.0 TB");
   });
+
+  it("appends a rate suffix when given one, for a throughput reading", () => {
+    expect(formatBytes(1024, "/s")).toBe("1.0 KB/s");
+    expect(formatBytes(512, "/s")).toBe("512 B/s");
+  });
 });
