@@ -12,6 +12,8 @@ export interface AppConfig {
   readonly sessionSecret: string | undefined;
   readonly dataDir: string;
   readonly workspaceRoot: string;
+  /** An Open Knowledge Format bundle to give missions, if the operator has one. */
+  readonly knowledgeBundlePath: string | undefined;
   readonly host: string;
   readonly port: number;
   readonly allowInsecure: boolean;
@@ -52,6 +54,7 @@ const schema = z.object({
   SESSION_SECRET: blankAsUndefined,
   DATA_DIR: blankAsUndefined,
   WORKSPACE_ROOT: blankAsUndefined,
+  KNOWLEDGE_BUNDLE_PATH: blankAsUndefined,
   HOST: blankAsUndefined,
   PORT: z.preprocess(
     (value) => (value === undefined || value === "" ? 3000 : Number(value)),
@@ -149,6 +152,7 @@ export function parseEnv(
     sessionSecret: env.SESSION_SECRET,
     dataDir,
     workspaceRoot: env.WORKSPACE_ROOT ?? path.join(dataDir, "work"),
+    knowledgeBundlePath: env.KNOWLEDGE_BUNDLE_PATH,
     host,
     port: env.PORT,
     allowInsecure,

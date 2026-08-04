@@ -16,6 +16,7 @@ import { planRecovery } from "./recover";
 import { createSdkDriver } from "./driver";
 import { MissionSession } from "./session";
 import { createMission } from "../missions";
+import { describeBundle, readBundle } from "../okf";
 import { resolveCredentials } from "../settings";
 
 /**
@@ -54,6 +55,20 @@ export function runningCount(): number {
   return sessions.size;
 }
 
+/**
+ * The mission's own instructions, with what the operator has written down about
+ * this deployment in front of them.
+ *
+ * A list of what exists and where, never the contents: an agent that needs the
+ * deployment's conventions reads them, and one that does not spends nothing.
+ */
+function withKnowledge(prompt: string, bundlePath: string | undefined): string {
+  if (!bundlePath) return prompt;
+
+  const described = describeBundle(readBundle(bundlePath), bundlePath);
+  return described ? `${described}\n\n---\n\n${prompt}` : prompt;
+}
+
 export async function launchMission(input: LaunchInput): Promise<string> {
   const db = getDatabase();
   const config = getConfig();
@@ -79,7 +94,7 @@ export async function launchMission(input: LaunchInput): Promise<string> {
 
     session.start(createSdkDriver(githubToken(db)), {
       missionId: mission.id,
-      prompt: input.prompt,
+      prompt: withKnowledge(input.prompt, config.knowledgeBundlePath),
       cwd,
       resume: getMission(db, mission.id)?.sessionId ?? undefined,
     });
