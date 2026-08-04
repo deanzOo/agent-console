@@ -4,16 +4,21 @@
 sides read it — the local script iterates it, the GitHub matrix is built from it. A check cannot exist in one
 place and not the other.
 
+Typecheck and build run through `turbo run`. [`turbo.json`](../../turbo.json) owns the task graph across the
+three packages — `web` and `agentd` typecheck after `core`, and build after their internal dependencies —
+so that ordering lives in exactly one file rather than being re-derived by every command that needs it. A
+change to only one package does not re-run the others' cached tasks.
+
 | Check                 | What it gates                                                          |
 | --------------------- | ---------------------------------------------------------------------- |
-| Typecheck             | `tsc --noEmit`, strict, `noUncheckedIndexedAccess`                     |
+| Typecheck             | `tsc --noEmit` per package, strict, `noUncheckedIndexedAccess`         |
 | Lint                  | ESLint — no `any`, no assertions, no unused, 300-line cap              |
 | Markdown              | markdownlint                                                           |
 | Documentation links   | Every relative link in a `.md` resolves                                |
 | Format                | Prettier                                                               |
 | Duplication           | jscpd, 2% threshold                                                    |
 | Tests + coverage      | vitest, with thresholds                                                |
-| Build                 | `next build`                                                           |
+| Build                 | `next build` and the `agentd` bundle, in dependency order              |
 | Smoke test            | Boots the built app and exercises two auth modes                       |
 | Dependency audit      | `npm audit --audit-level=high`                                         |
 | Registry signatures   | `npm audit signatures` — what the lockfile resolved is what was signed |

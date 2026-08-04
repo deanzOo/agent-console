@@ -11,12 +11,14 @@
   "engines": {
     "node": ">=22"
   },
+  "packageManager": "npm@10.9.8",
   "scripts": {
     "dev": "npm run dev   -w @agent-console/web",
-    "build": "npm run build -w @agent-console/web",
+    "build": "turbo run build",
     "start": "npm run start -w @agent-console/web",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p packages/core && tsc --noEmit -p apps/web && tsc --noEmit -p apps/agentd",
+    "typecheck": "turbo run typecheck typecheck:root",
+    "typecheck:root": "tsc --noEmit",
     "dupes": "jscpd",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -79,6 +81,7 @@
     "prettier": "^3.9.6",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4.3.3",
+    "turbo": "^2.10.8",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.65.0",
     "vitest": "^4.1.10"

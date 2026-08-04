@@ -26,3 +26,6 @@ dist/
 # Stryker writes its sandboxes and reports here; both are local artifacts.
 .stryker-tmp/
 reports/
+
+# Turborepo's local task cache — a build artifact, never committed.
+.turbo/

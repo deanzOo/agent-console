@@ -2,7 +2,7 @@
   {
     "id": "typecheck",
     "name": "Typecheck",
-    "command": "npm run typecheck"
+    "command": "npx turbo run typecheck typecheck:root"
   },
   {
     "id": "lint",
@@ -37,12 +37,12 @@
   {
     "id": "build",
     "name": "Build",
-    "command": "npm run build"
+    "command": "npx turbo run build"
   },
   {
     "id": "smoke",
     "name": "Smoke test",
-    "command": "npm run build && npm run build -w @agent-console/agentd && bash scripts/smoke-test.sh"
+    "command": "npx turbo run build && bash scripts/smoke-test.sh"
   },
   {
     "id": "audit",
