@@ -7,6 +7,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  ne,
   notInArray,
   sql,
   type SQL,
@@ -158,6 +159,29 @@ export function archiveMission(db: Db, id: string): void {
 
 export function restoreMission(db: Db, id: string): void {
   db.update(missions).set({ archivedAt: null }).where(eq(missions.id, id)).run();
+}
+
+/** A mission row the SQL below has already guaranteed has a real worktree path. */
+export interface MissionWithWorktree extends Mission {
+  readonly worktreePath: string;
+}
+
+function hasWorktreePath(mission: Mission): mission is MissionWithWorktree {
+  return mission.worktreePath !== null && mission.worktreePath !== "";
+}
+
+// Disk usage cares about every mission that ever got a worktree, live or long
+// archived — unlike listMissions, this deliberately ignores archivedAt. The
+// filter is applied twice: once in SQL so the database does the work, and
+// once as a type guard so callers see `worktreePath: string` instead of
+// re-deriving the same guarantee the query already made.
+export function listMissionsWithWorktree(db: Db): MissionWithWorktree[] {
+  return db
+    .select()
+    .from(missions)
+    .where(and(isNotNull(missions.worktreePath), ne(missions.worktreePath, "")))
+    .all()
+    .filter(hasWorktreePath);
 }
 
 export function setStatus(db: Db, id: string, status: MissionStatus): void {

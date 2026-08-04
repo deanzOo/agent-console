@@ -52,14 +52,20 @@ are read by the console: two processes, one database file, and only one place th
 
 ## Everything else
 
-| Route        | Method | Body                 | Answers                                |
-| ------------ | ------ | -------------------- | -------------------------------------- |
-| `/api/login` | POST   | `{ password }`       | `{ ok }` plus the session cookie       |
-| `/api/setup` | GET    | —                    | The wizard's state                     |
-| `/api/setup` | POST   | `{ step, … }`        | `{ ok }`                               |
-| `/api/sync`  | POST   | —                    | `{ issues?, repos?, tasks?, …Error? }` |
-| `/api/push`  | GET    | —                    | `{ publicKey }`                        |
-| `/api/push`  | POST   | `{ endpoint, keys }` | `201 { ok }`                           |
+| Route                            | Method | Body                 | Answers                                |
+| -------------------------------- | ------ | -------------------- | -------------------------------------- |
+| `/api/login`                     | POST   | `{ password }`       | `{ ok }` plus the session cookie       |
+| `/api/setup`                     | GET    | —                    | The wizard's state                     |
+| `/api/setup`                     | POST   | `{ step, … }`        | `{ ok }`                               |
+| `/api/sync`                      | POST   | —                    | `{ issues?, repos?, tasks?, …Error? }` |
+| `/api/push`                      | GET    | —                    | `{ publicKey }`                        |
+| `/api/push`                      | POST   | `{ endpoint, keys }` | `201 { ok }`                           |
+| `/api/disk-usage/orphans/[name]` | DELETE | —                    | `{ ok }`                               |
+
+`disk-usage/orphans/[name]` deletes a tree under `wt/` with no mission row behind it — the counterpart to
+`workspace` for a mission's own tree, needed because an orphan has no mission status to refuse against. `name`
+is checked against a plain allowlist rather than resolved as a path, so a traversal attempt is refused outright
+rather than relying on catching it after normalising.
 
 `/api/login` exists only when `AUTH_MODE=password`; otherwise it is 404. A wrong password and an instance with
 no password set answer identically, so an unauthenticated caller learns nothing about the deployment.

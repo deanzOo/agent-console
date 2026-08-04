@@ -13,6 +13,7 @@ import {
   createMission,
   getMission,
   listEvents,
+  listMissionsWithWorktree,
   recordWorkspace,
   restoreMission,
   listMissions,
@@ -83,6 +84,41 @@ describe("recordWorkspace", () => {
     const found = getMission(db, m.id);
     expect(found?.branch).toBe("agent/thing-abc");
     expect(found?.worktreePath).toBe("/workspace/wt/abc");
+  });
+});
+
+describe("listMissionsWithWorktree", () => {
+  it("skips a mission that never got a worktree", () => {
+    newMission();
+    expect(listMissionsWithWorktree(db)).toEqual([]);
+  });
+
+  it("includes a mission with a recorded worktree", () => {
+    const m = newMission();
+    recordWorkspace(db, m.id, { branch: "agent/x", worktreePath: "/ws/wt/x" });
+
+    const found = listMissionsWithWorktree(db);
+    expect(found.map((row) => row.id)).toEqual([m.id]);
+  });
+
+  // discardWorkspace clears worktreePath to "" once it removes the tree, so a
+  // mission that has already been reclaimed must not be listed again.
+  it("skips a mission whose worktree was already discarded", () => {
+    const m = newMission();
+    recordWorkspace(db, m.id, { branch: "agent/x", worktreePath: "/ws/wt/x" });
+    recordWorkspace(db, m.id, { branch: "agent/x", worktreePath: "" });
+
+    expect(listMissionsWithWorktree(db)).toEqual([]);
+  });
+
+  // Disk usage covers what is actually on disk, including trees left behind
+  // by missions the operator has already tidied out of the active list.
+  it("includes an archived mission that still has a worktree", () => {
+    const m = newMission();
+    recordWorkspace(db, m.id, { branch: "agent/x", worktreePath: "/ws/wt/x" });
+    archiveMission(db, m.id);
+
+    expect(listMissionsWithWorktree(db).map((row) => row.id)).toEqual([m.id]);
   });
 });
 
