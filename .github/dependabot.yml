@@ -19,10 +19,9 @@ updates:
       development-minor-patch:
         dependency-type: development
         update-types: [minor, patch]
-    ignore:
-      # Majors land as their own PR (ungrouped) so each gets a real review.
-      - dependency-name: "*"
-        update-types: [version-update:semver-major]
+    # Majors are deliberately not grouped. An update that matches no group gets
+    # its own pull request, which is what gives a breaking change a review of
+    # its own instead of a line in a list of six.
 
   - package-ecosystem: github-actions
     directory: "/"
@@ -33,8 +32,12 @@ updates:
       prefix: "chore"
       include: scope
     groups:
+      # Minor and patch only, for the same reason as npm: a major bump of an
+      # action can change what a job does, and arriving inside a group of six
+      # is how it gets read as routine.
       actions:
         patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: docker
     directory: "/"

@@ -310,7 +310,8 @@ checks, and the full gate all run again in CI.
 
 ## Dependencies and security
 
-- Dependabot runs weekly, grouped by risk class; majors come as their own PR.
+- Dependabot runs weekly. Minor and patch updates are grouped by risk class; a major matches no group, so it
+  arrives as its own pull request and gets a review of its own.
 - Trivy scans deps, secrets, and IaC — fails on HIGH/CRITICAL, full inventory to code scanning.
 - CodeQL runs `security-and-quality` on every PR.
 - Before adding a dependency: does the stdlib or an already-installed package do it? A few lines beat a new
