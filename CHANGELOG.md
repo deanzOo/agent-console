@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0](https://github.com/deanzOo/agent-console/compare/v0.3.0...v0.4.0) (2026-08-05)
+
+
+### Features
+
+* give missions an Open Knowledge Format bundle ([#93](https://github.com/deanzOo/agent-console/issues/93)) ([d09869e](https://github.com/deanzOo/agent-console/commit/d09869e7ed5742adabbd1a520ca57477defee9b0))
+* queue missions past the concurrency cap ([#98](https://github.com/deanzOo/agent-console/issues/98)) ([541f05f](https://github.com/deanzOo/agent-console/commit/541f05f136d0be0f71a53a8b4abb614a8fb52bfb))
+* **ui:** add a stats screen for spend and operator wait time ([#102](https://github.com/deanzOo/agent-console/issues/102)) ([8fa191b](https://github.com/deanzOo/agent-console/commit/8fa191b75195963f4643279968f442786110a9db))
+
+
+### Bug Fixes
+
+* a finished turn is not a finished session ([#103](https://github.com/deanzOo/agent-console/issues/103)) ([66837d7](https://github.com/deanzOo/agent-console/commit/66837d7ecccaf6772e9460ce777cd0d4acaed56f))
+* **ci:** lowercase the image repository name ([#105](https://github.com/deanzOo/agent-console/issues/105)) ([d9e2970](https://github.com/deanzOo/agent-console/commit/d9e2970413459da2c377fa7715b03643321d949b))
+* recovery obeys the concurrency cap, and queues the rest ([#106](https://github.com/deanzOo/agent-console/issues/106)) ([6887027](https://github.com/deanzOo/agent-console/commit/6887027401b28a74f27c2b27d247ed0058f7f525))
+* register a session's watchers after it starts, not before ([#107](https://github.com/deanzOo/agent-console/issues/107)) ([03fdd5b](https://github.com/deanzOo/agent-console/commit/03fdd5b4a1f7a90fe1b9fa9577113f11cbd2fbb0))
+* the agent CLI, and issues that never went away ([#94](https://github.com/deanzOo/agent-console/issues/94)) ([4e26370](https://github.com/deanzOo/agent-console/commit/4e263702d88ff7e1e22147a7332995c3ab81d2a1))
+
 ## [0.3.0](https://github.com/deanzOo/agent-console/compare/v0.2.0...v0.3.0) (2026-08-04)
 
 
