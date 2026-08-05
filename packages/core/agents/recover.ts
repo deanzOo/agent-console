@@ -21,14 +21,9 @@ export const LIVE_STATUSES = [
  */
 export const MAX_RESUME_ATTEMPTS = 3;
 
-/**
- * How many resume at once. Each replays context and costs tokens, so a boot
- * after a long outage should not silently spend a fortune.
- */
-export const MAX_RESUMED_PER_BOOT = 5;
-
 export type Recovery =
   | { readonly action: "resume"; readonly mission: Mission }
+  | { readonly action: "queue"; readonly mission: Mission }
   | { readonly action: "stop"; readonly mission: Mission; readonly reason: string };
 
 function resumeCount(db: Db, missionId: string): number {
@@ -43,7 +38,22 @@ function resumeCount(db: Db, missionId: string): number {
  * Separated from the doing so the rules are testable without spawning an agent:
  * which missions come back, which are given up on, and why.
  */
-export function planRecovery(db: Db, exists = existsSync): Recovery[] {
+/**
+ * Decides what becomes of missions whose session died with the process.
+ *
+ * `capacity` is the concurrency cap, and it applies here for the same reason it
+ * applies to a launch: a resumed mission is an agent like any other. Bringing
+ * back more than the box was told to run is how a restart recreated the very
+ * pile-up the cap exists to prevent.
+ *
+ * What does not fit is queued rather than stopped. The work is still there and a
+ * slot will free; stopping it would throw away a worktree for want of a minute.
+ */
+export function planRecovery(
+  db: Db,
+  capacity: number,
+  exists = existsSync,
+): Recovery[] {
   const orphans = db
     .select()
     .from(missions)
@@ -67,9 +77,7 @@ export function planRecovery(db: Db, exists = existsSync): Recovery[] {
         reason: `it has already been resumed ${MAX_RESUME_ATTEMPTS} times`,
       };
     }
-    if (resuming >= MAX_RESUMED_PER_BOOT) {
-      return { action: "stop", mission, reason: "too many missions to resume at once" };
-    }
+    if (resuming >= capacity) return { action: "queue", mission };
 
     resuming += 1;
     return { action: "resume", mission };

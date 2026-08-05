@@ -210,6 +210,32 @@ function queuedInput(mission: Mission): LaunchInput {
 }
 
 /**
+ * Brings a mission back with the session it already had.
+ *
+ * Used by recovery and by the queue, because a mission that was live before the
+ * restart keeps its working tree and its session id — starting it fresh would
+ * try to create a worktree that is already there.
+ */
+function resumeSession(mission: Mission): void {
+  const db = getDatabase();
+  const config = getConfig();
+
+  closeOpenPrompts(db, mission.id);
+  appendEvent(db, mission.id, "mission.resumed", { sessionId: mission.sessionId });
+
+  const session = new MissionSession(db, mission.id);
+  sessions.set(mission.id, session);
+  releaseSlotWhenFinished(mission.id, session);
+  closeWhenIdle(mission.id, session);
+  session.start(createSdkDriver(githubToken(db)), {
+    missionId: mission.id,
+    prompt: "Continue where you left off.",
+    cwd: mission.worktreePath || config.workspaceRoot,
+    resume: mission.sessionId ?? undefined,
+  });
+}
+
+/**
  * Starts whatever the box now has room for.
  *
  * Called when a mission ends and when the host boots, which are the only two
@@ -228,7 +254,10 @@ export async function drainQueue(): Promise<number> {
     // queued forever, and startMission records the failure itself.
     setStatus(db, waiting.id, MISSION_STATUS.STARTING);
     try {
-      await startMission(waiting.id, queuedInput(waiting));
+      // A mission queued by recovery already has a session and a tree; one
+      // queued at launch has neither.
+      if (waiting.sessionId) resumeSession(waiting);
+      else await startMission(waiting.id, queuedInput(waiting));
       started += 1;
     } catch {
       // Already recorded on the mission; the next one still deserves its turn.
@@ -301,12 +330,22 @@ async function prepareWorkspace(
  */
 export async function recoverMissions(): Promise<{ resumed: number; stopped: number }> {
   const db = getDatabase();
-  const config = getConfig();
   let resumed = 0;
   let stopped = 0;
 
-  for (const plan of planRecovery(db)) {
+  for (const plan of planRecovery(db, concurrencyLimit(db))) {
     const { mission } = plan;
+
+    // Waiting, not abandoned: it keeps its tree and its place, and starts when
+    // a slot frees.
+    if (plan.action === "queue") {
+      setStatus(db, mission.id, MISSION_STATUS.QUEUED);
+      appendEvent(db, mission.id, "mission.status", {
+        status: MISSION_STATUS.QUEUED,
+        note: "waiting for a free slot after the session host restarted",
+      });
+      continue;
+    }
 
     if (plan.action === "stop") {
       closeOpenPrompts(db, mission.id);
@@ -321,19 +360,7 @@ export async function recoverMissions(): Promise<{ resumed: number; stopped: num
 
     // The approval it was parked on died with the process, so it is closed and
     // the agent asks again. Seeing the same request twice beats losing the work.
-    closeOpenPrompts(db, mission.id);
-    appendEvent(db, mission.id, "mission.resumed", { sessionId: mission.sessionId });
-
-    const session = new MissionSession(db, mission.id);
-    sessions.set(mission.id, session);
-    releaseSlotWhenFinished(mission.id, session);
-    closeWhenIdle(mission.id, session);
-    session.start(createSdkDriver(githubToken(db)), {
-      missionId: mission.id,
-      prompt: "Continue where you left off.",
-      cwd: mission.worktreePath || config.workspaceRoot,
-      resume: mission.sessionId ?? undefined,
-    });
+    resumeSession(mission);
     resumed += 1;
   }
 
