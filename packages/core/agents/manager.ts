@@ -4,14 +4,16 @@ import { getDatabase, type Db } from "../db";
 import {
   appendEvent,
   getMission,
+  missionPrompt,
   recordWorkspace,
   setStatus,
   type MissionSource,
 } from "../missions";
-import { MISSION_STATUS } from "../schema";
+import { MISSION_STATUS, type Mission } from "../schema";
 import { branchNameFor } from "../repos";
 import { createWorktree, defaultBranch, ensureBareClone } from "../git";
 import { closeOpenPrompts } from "./orphans";
+import { concurrencyLimit, hasCapacity, nextQueued } from "./queue";
 import { planRecovery } from "./recover";
 import { createSdkDriver } from "./driver";
 import { MissionSession } from "./session";
@@ -69,17 +71,18 @@ function withKnowledge(prompt: string, bundlePath: string | undefined): string {
   return described ? `${described}\n\n---\n\n${prompt}` : prompt;
 }
 
-export async function launchMission(input: LaunchInput): Promise<string> {
+/**
+ * Starts a mission that already exists, whether it was just accepted or has
+ * been waiting in the queue.
+ *
+ * The working tree is created here rather than at acceptance: a queue twenty
+ * deep would otherwise be twenty checkouts on a small disk, most of which are
+ * not being worked in.
+ */
+async function startMission(missionId: string, input: LaunchInput): Promise<void> {
   const db = getDatabase();
   const config = getConfig();
-
-  const mission = createMission(db, {
-    title: input.title,
-    source: input.source,
-    prompt: input.prompt,
-    sourceRef: input.sourceRef,
-    repo: input.repo,
-  });
+  const mission = { id: missionId };
 
   try {
     const cwd = (await prepareWorkspace(db, mission.id, input)) ?? config.workspaceRoot;
@@ -91,6 +94,7 @@ export async function launchMission(input: LaunchInput): Promise<string> {
 
     const session = new MissionSession(db, mission.id);
     sessions.set(mission.id, session);
+    releaseSlotWhenFinished(mission.id, session);
 
     session.start(createSdkDriver(githubToken(db)), {
       missionId: mission.id,
@@ -113,7 +117,101 @@ export async function launchMission(input: LaunchInput): Promise<string> {
     });
     throw error;
   }
+}
 
+const TERMINAL = [
+  MISSION_STATUS.DONE,
+  MISSION_STATUS.FAILED,
+  MISSION_STATUS.STOPPED,
+] as const;
+
+/**
+ * Frees the slot when a mission ends, and gives it to whoever is waiting.
+ *
+ * Listening to the transcript rather than the session's own lifetime: every way
+ * a mission can end already records its status there, so there is one place to
+ * watch instead of one per ending.
+ */
+function releaseSlotWhenFinished(missionId: string, session: MissionSession): void {
+  const stop = session.subscribe((event) => {
+    if (event.type !== "mission.status") return;
+    const status = Object(event.payload).status;
+    if (!TERMINAL.some((terminal) => terminal === status)) return;
+
+    stop();
+    sessions.delete(missionId);
+    void drainQueue().catch(() => undefined);
+  });
+}
+
+/**
+ * The input a queued mission was accepted with.
+ *
+ * Held in the row rather than in memory, so a queue survives the restart that
+ * the whole recovery mechanism exists for.
+ */
+function queuedInput(mission: Mission): LaunchInput {
+  return {
+    title: mission.title,
+    prompt: missionPrompt(getDatabase(), mission.id) ?? "",
+    source: mission.source,
+    sourceRef: mission.sourceRef ?? undefined,
+    repo: mission.repo ?? undefined,
+  };
+}
+
+/**
+ * Starts whatever the box now has room for.
+ *
+ * Called when a mission ends and when the host boots, which are the only two
+ * moments capacity appears.
+ */
+export async function drainQueue(): Promise<number> {
+  const db = getDatabase();
+  const limit = concurrencyLimit(db);
+  let started = 0;
+
+  while (hasCapacity(runningCount(), limit)) {
+    const waiting = nextQueued(db);
+    if (!waiting) break;
+
+    // Out of the queue before it starts: a failure to start must not leave it
+    // queued forever, and startMission records the failure itself.
+    setStatus(db, waiting.id, MISSION_STATUS.STARTING);
+    try {
+      await startMission(waiting.id, queuedInput(waiting));
+      started += 1;
+    } catch {
+      // Already recorded on the mission; the next one still deserves its turn.
+    }
+  }
+
+  return started;
+}
+
+export async function launchMission(input: LaunchInput): Promise<string> {
+  const db = getDatabase();
+
+  const mission = createMission(db, {
+    title: input.title,
+    source: input.source,
+    prompt: input.prompt,
+    sourceRef: input.sourceRef,
+    repo: input.repo,
+  });
+
+  // Accepted either way. What changes is whether it starts now or waits, and
+  // the operator sees which from the mission's own status.
+  if (!hasCapacity(runningCount(), concurrencyLimit(db))) {
+    setStatus(db, mission.id, MISSION_STATUS.QUEUED);
+    appendEvent(db, mission.id, "mission.status", {
+      status: MISSION_STATUS.QUEUED,
+      note: "waiting for a free slot",
+    });
+    return mission.id;
+  }
+
+  await startMission(mission.id, input);
   return mission.id;
 }
 
@@ -179,6 +277,7 @@ export async function recoverMissions(): Promise<{ resumed: number; stopped: num
 
     const session = new MissionSession(db, mission.id);
     sessions.set(mission.id, session);
+    releaseSlotWhenFinished(mission.id, session);
     session.start(createSdkDriver(githubToken(db)), {
       missionId: mission.id,
       prompt: "Continue where you left off.",
@@ -188,7 +287,12 @@ export async function recoverMissions(): Promise<{ resumed: number; stopped: num
     resumed += 1;
   }
 
-  return { resumed, stopped };
+  // A queue survives the restart too, and boot is one of the two moments
+  // capacity appears. Resumed missions are counted first, so this only starts
+  // what the box still has room for.
+  const started = await drainQueue();
+
+  return { resumed: resumed + started, stopped };
 }
 
 export async function stopMission(missionId: string): Promise<void> {

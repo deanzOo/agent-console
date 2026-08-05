@@ -19,6 +19,9 @@ function oneOf(column: SQLWrapper, values: readonly string[]) {
 }
 
 export const MISSION_STATUS = {
+  // Accepted and durable, but not started: the box is already running as many
+  // agents as it was told to. It has no session and no working tree yet.
+  QUEUED: "queued",
   STARTING: "starting",
   RUNNING: "running",
   AWAITING_INPUT: "awaiting_input",
@@ -28,6 +31,7 @@ export const MISSION_STATUS = {
 } as const;
 
 export const MISSION_STATUSES = [
+  MISSION_STATUS.QUEUED,
   MISSION_STATUS.STARTING,
   MISSION_STATUS.RUNNING,
   MISSION_STATUS.AWAITING_INPUT,
