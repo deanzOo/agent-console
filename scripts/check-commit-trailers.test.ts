@@ -65,3 +65,32 @@ describe("check-commit-trailers", () => {
     ).toBe(true);
   });
 });
+
+// The check is about attribution, not vocabulary. This repository runs Claude
+// Code, so its own README says the words — and a commit explaining what the
+// code does was rejected for quoting it.
+describe("naming the product", () => {
+  it("accepts a body that explains what a mission is", () => {
+    expect(
+      check(
+        "fix: cap concurrency\n\nA mission is a whole Claude Code process, not a request.",
+      ).accepted,
+    ).toBe(true);
+  });
+
+  it("still rejects the generated-with footer", () => {
+    expect(check("feat: a thing\n\n🤖 Generated with Claude Code").accepted).toBe(
+      false,
+    );
+  });
+
+  it("still rejects a credit written as prose", () => {
+    expect(check("feat: a thing\n\nWritten by Claude Code.").accepted).toBe(false);
+  });
+
+  it("still rejects a co-author trailer", () => {
+    expect(
+      check("feat: a thing\n\nCo-Authored-By: Someone <s@example.com>").accepted,
+    ).toBe(false);
+  });
+});

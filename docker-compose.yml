@@ -1,8 +1,24 @@
 services:
   agent-console:
+    # Both, deliberately. A deployment sets AGENT_CONSOLE_IMAGE to a published
+    # tag and pulls it; anyone else runs `docker compose up --build` and gets
+    # the same thing built locally, with no registry and no account.
     build: .
-    image: agent-console:local
+    image: ${AGENT_CONSOLE_IMAGE:-agent-console:local}
     restart: unless-stopped
+    # This box runs other things. Without a ceiling the console takes what it
+    # takes, and what took the machine down was memory - agents are whole Claude
+    # Code processes, not requests.
+    #
+    # A limit is not a substitute for the concurrency cap: it decides what
+    # happens when the cap is wrong, which is that Docker kills this container
+    # rather than the kernel killing something else on the machine.
+    mem_limit: ${MEM_LIMIT:-4g}
+    memswap_limit: ${MEMSWAP_LIMIT:-5g}
+    cpus: ${CPU_LIMIT:-1.5}
+    # An agent runs real commands, and a runaway one forks. This is the ceiling
+    # on that, not on anything the console itself does.
+    pids_limit: ${PIDS_LIMIT:-512}
     env_file: .env
     environment:
       # Inside the container these are fixed; the volumes below back them.

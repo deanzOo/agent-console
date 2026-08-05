@@ -117,3 +117,26 @@ to read each entry; they open what the task needs.
 Two rules, repeated because they matter: the bundle never goes in the
 repository, and it never holds a token. Agents read these files, and an agent
 has a shell.
+
+## Limiting what it takes
+
+The compose file caps memory, CPU and process count, with defaults for a small
+VPS that runs other things: 4GB, 1.5 cores, 512 processes. Override any of them
+in `.env` — `MEM_LIMIT`, `MEMSWAP_LIMIT`, `CPU_LIMIT`, `PIDS_LIMIT`.
+
+Memory is the one that matters. A mission is a whole Claude Code process, and a
+machine that runs out of it does not get slow — it stops answering SSH while the
+kernel picks something to kill. The limit decides that this container is what
+gets killed, instead of whatever else the machine is running.
+
+It is not a substitute for `max_concurrent_missions`. The cap decides how many
+agents run; the limit decides what happens when the cap is set too high for the
+box.
+
+**Check the ceiling is real** rather than assuming, since a typo in a value
+silently means no limit:
+
+```bash
+docker inspect agent-console-agent-console-1 \
+  --format '{{.HostConfig.Memory}} {{.HostConfig.NanoCpus}} {{.HostConfig.PidsLimit}}'
+```
