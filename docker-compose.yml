@@ -1,7 +1,10 @@
 services:
   agent-console:
+    # Both, deliberately. A deployment sets AGENT_CONSOLE_IMAGE to a published
+    # tag and pulls it; anyone else runs `docker compose up --build` and gets
+    # the same thing built locally, with no registry and no account.
     build: .
-    image: agent-console:local
+    image: ${AGENT_CONSOLE_IMAGE:-agent-console:local}
     restart: unless-stopped
     env_file: .env
     environment:

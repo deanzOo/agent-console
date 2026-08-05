@@ -1,0 +1,52 @@
+name: Image
+
+# The server used to build its own image. On a two-core box already running
+# agents that meant `npm ci` inside a container build competing with them for
+# memory — which is how the OOM killer came to shoot the build four times and
+# take the machine down with it. Building here and pulling there leaves the
+# server with one job.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          push: true
+          # The commit tag is what a deploy asks for: `main` moves, and a deploy
+          # that pulls a moving tag cannot say what it installed.
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ github.sha }}
+            ghcr.io/${{ github.repository }}:main
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The image is what an operator runs, and a broken CLI inside it is
+      # invisible to every other check — it shipped once already.
+      - name: The agent CLI runs
+        run: docker run --rm ghcr.io/${{ github.repository }}:${{ github.sha }} claude --version

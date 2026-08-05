@@ -110,6 +110,25 @@ TLS, proxying to `127.0.0.1:3000`.
 Open the hostname and complete `/setup`. Each credential is validated live, so a wrong token fails there
 rather than halfway through your first mission.
 
+## Where the image comes from
+
+CI builds it and publishes it to `ghcr.io`, tagged with the commit. The server
+pulls that tag; it never builds.
+
+That is not tidiness. The server has two cores and runs agents: a container
+build there means `npm ci` competing with them for memory, and on a box with no
+swap the OOM killer takes the build — repeatedly, since buildx retries — until
+the machine stops answering. That happened, and it is why this changed.
+
+Anyone running this without a registry still can: `docker compose up --build`
+builds locally, because the compose file declares both an image and a build
+context. `AGENT_CONSOLE_IMAGE` is what a deployment sets to pull instead.
+
+**One-time setup:** the package at `ghcr.io/<owner>/agent-console` is private
+when first published. Make it public, or give the server a token that can read
+packages, or the pull will fail with a message about authentication rather than
+about the image.
+
 ## Upgrading
 
 Pull, build, restart. **A redeploy no longer ends a mission**: the session host stores each session's id as it

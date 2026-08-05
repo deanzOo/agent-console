@@ -49,9 +49,24 @@ step "Deploying $REF to $DEPLOY_HOST:$DEPLOY_PATH"
 ssh "$DEPLOY_HOST" "cd '$DEPLOY_PATH' && git fetch --quiet origin && git reset --hard 'origin/$REF' --quiet && git log --oneline -1" \
   || fail "Could not update the checkout on $DEPLOY_HOST"
 
-step "Building"
-ssh "$DEPLOY_HOST" "cd '$DEPLOY_PATH' && docker compose build" > /tmp/deploy-build.log 2>&1 \
-  || { tail -20 /tmp/deploy-build.log >&2; fail "Build failed on $DEPLOY_HOST"; }
+# The server does not build. `npm ci` inside a container build, on a box already
+# running agents, is what the OOM killer kept shooting — four times in one
+# deploy, taking the machine down with it. CI builds and publishes; this pulls
+# the tag for the exact commit, so a deploy can say what it installed.
+sha="$(ssh "$DEPLOY_HOST" "cd '$DEPLOY_PATH' && git rev-parse HEAD")" \
+  || fail "Could not read the deployed commit"
+image="ghcr.io/${IMAGE_REPO:-deanzOo/agent-console}:${sha}"
+
+step "Pulling ${image##*/}"
+pull_started=$(date +%s)
+ssh "$DEPLOY_HOST" "cd '$DEPLOY_PATH' && AGENT_CONSOLE_IMAGE='$image' docker compose pull --quiet" \
+  || fail "No published image for $sha. The Image workflow builds it on push to main — check it has finished."
+printf '    pulled in %ds\n' "$(($(date +%s) - pull_started))"
+
+# Written where compose reads it, so `docker compose` on the server without this
+# script uses the same image rather than silently building one.
+ssh "$DEPLOY_HOST" "cd '$DEPLOY_PATH' && grep -v '^AGENT_CONSOLE_IMAGE=' .env > .env.next && echo \"AGENT_CONSOLE_IMAGE=$image\" >> .env.next && mv .env.next .env" \
+  || fail "Could not record the image in .env"
 
 step "Restarting"
 ssh "$DEPLOY_HOST" "cd '$DEPLOY_PATH' && docker compose up -d" \
@@ -61,14 +76,19 @@ ssh "$DEPLOY_HOST" "cd '$DEPLOY_PATH' && docker compose up -d" \
 # a container which starts and then cannot serve.
 step "Waiting for healthy"
 healthy=0
+health_started=$(date +%s)
 for _ in $(seq 1 60); do
   status="$(ssh "$DEPLOY_HOST" "cd '$DEPLOY_PATH' && docker compose ps --format '{{.Status}}'" 2>/dev/null)"
   case "$status" in
     *healthy*) healthy=1; break ;;
     *Exited*|*Restarting*) fail "Container is $status" ;;
   esac
+  # A health check taking its time and one that will never pass are the same
+  # thing in silence.
+  printf '\r\033[K    %ds  %s' "$(($(date +%s) - health_started))" "${status:-starting}"
   sleep 2
 done
+printf '\r\033[K'
 [ "$healthy" -eq 1 ] || fail "Container never became healthy"
 
 # The session host has no route through the proxy, so it is asked from inside.
