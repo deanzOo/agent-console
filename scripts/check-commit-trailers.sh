@@ -17,7 +17,11 @@ if printf '%s' "$body" | grep -qiE '^[[:space:]]*(co-authored-by|generated[- ]wi
   exit 1
 fi
 
-if printf '%s' "$body" | grep -qiE '🤖 Generated with|Claude Code'; then
+# Attribution, not the product's name. This repository is a console for running
+# Claude Code, so its own README says the words in the first line — matching the
+# bare name rejected commits that merely explained what the code does.
+if printf '%s' "$body" | grep -qiE '🤖 generated with|(generated|written|authored|created|made) (with|by)[[:space:]]+[^[:space:]]*[[:space:]]*claude'; then
   echo "error: tool attribution is not used in this repository." >&2
+  echo "Naming the product is fine; crediting it for the commit is not." >&2
   exit 1
 fi
