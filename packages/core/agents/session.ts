@@ -115,6 +115,11 @@ export class MissionSession {
    * memory. Anything counting what the box is running has to wait for this.
    */
   async whenFinished(): Promise<void> {
+    // Awaiting an unstarted session would resolve at once — `await undefined`
+    // is immediate — and a caller waiting for the end would be told it had
+    // already happened. That silently unregistered every session the moment it
+    // was created, so this is loud instead.
+    if (!this.#finished) throw new Error("session has not started");
     await this.#finished;
   }
 
