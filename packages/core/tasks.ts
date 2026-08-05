@@ -92,6 +92,12 @@ export function listTaskWorkspaces(db: Db): TaskWorkspace[] {
   );
 }
 
+/** A single cached task, for the places that already know its gid — a
+ * mission's source, say — rather than needing to page through a filter. */
+export function getCachedTask(db: Db, gid: string): CachedTask | undefined {
+  return db.select().from(asanaCache).where(eq(asanaCache.gid, gid)).get();
+}
+
 export function listTaskProjects(db: Db): string[] {
   const rows = db
     .selectDistinct({ project: asanaCache.project })

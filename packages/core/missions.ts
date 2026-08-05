@@ -97,6 +97,12 @@ const LIVE_STATUSES = [
   MISSION_STATUS.AWAITING_INPUT,
 ] as const;
 
+/** Whether a mission in this status still holds a session — the line between
+ * "offer to launch another" and "point at the one already running". */
+export function isLiveStatus(status: MissionStatus): boolean {
+  return LIVE_STATUSES.some((live) => live === status);
+}
+
 function conditionsFor(filter: MissionFilter): SQL[] {
   const query = filter.query?.trim();
   const conditions: SQL[] = [
@@ -122,6 +128,40 @@ export function listMissions(db: Db, filter: MissionFilter = {}): Mission[] {
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(missions.createdAt), desc(sql`rowid`))
     .all();
+}
+
+/**
+ * The most recent mission for each source ref that has one, keyed by ref.
+ *
+ * A ref can have several missions across retries; the issues and tasks lists
+ * only want the current one, so ties are broken the same way listMissions
+ * breaks them — newest createdAt, then rowid.
+ */
+export function latestMissionsBySourceRef(
+  db: Db,
+  source: MissionSource,
+  sourceRefs: readonly string[],
+): Map<string, Mission> {
+  const map = new Map<string, Mission>();
+  if (sourceRefs.length === 0) return map;
+
+  const rows = db
+    .select()
+    .from(missions)
+    .where(
+      and(
+        eq(missions.source, source),
+        inArray(missions.sourceRef, [...sourceRefs]),
+        isNull(missions.archivedAt),
+      ),
+    )
+    .orderBy(desc(missions.createdAt), desc(sql`rowid`))
+    .all();
+
+  for (const row of rows) {
+    if (row.sourceRef && !map.has(row.sourceRef)) map.set(row.sourceRef, row);
+  }
+  return map;
 }
 
 /** How many missions match, without loading them: the nav wants a number. */
