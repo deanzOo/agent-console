@@ -85,8 +85,11 @@ A mission accepted while the cap is reached is **queued**, not refused: it is
 durable, keeps its place, and starts when a slot frees. It has no working tree
 until it starts, so a long queue costs a row each rather than a checkout each.
 
-The queue survives a restart. Recovery brings back what was running first, then
-starts queued missions with whatever room is left.
+The queue survives a restart, and **recovery obeys the same cap**. A restart
+brings back at most this many missions; the rest keep their working trees and
+their place in the queue, and start as slots free. Bringing back more than the
+box was told to run is how a restart used to recreate the pile-up this exists to
+prevent.
 
 ## Settings-table only
 

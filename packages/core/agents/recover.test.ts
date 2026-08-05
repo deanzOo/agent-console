@@ -12,7 +12,7 @@ import {
   setStatus,
 } from "../missions";
 import { MISSION_STATUS } from "../schema";
-import { MAX_RESUME_ATTEMPTS, MAX_RESUMED_PER_BOOT, planRecovery } from "./recover";
+import { MAX_RESUME_ATTEMPTS, planRecovery } from "./recover";
 
 let dir: string;
 let db: Db;
@@ -43,7 +43,7 @@ describe("planRecovery", () => {
   it("brings back a mission that has a session to resume", () => {
     const id = interrupted({ session: "s1" });
 
-    const plan = planRecovery(db, alwaysExists);
+    const plan = planRecovery(db, 5, alwaysExists);
 
     expect(plan).toHaveLength(1);
     expect(plan[0]).toMatchObject({ action: "resume" });
@@ -53,7 +53,7 @@ describe("planRecovery", () => {
   // It never got far enough to have anything to resume.
   it("stops one that never had a session", () => {
     interrupted();
-    expect(planRecovery(db, alwaysExists)[0]).toMatchObject({
+    expect(planRecovery(db, 5, alwaysExists)[0]).toMatchObject({
       action: "stop",
       reason: "no session to resume",
     });
@@ -64,7 +64,7 @@ describe("planRecovery", () => {
   it("stops one whose working tree was discarded", () => {
     interrupted({ session: "s1", tree: "/gone" });
 
-    const plan = planRecovery(db, () => false);
+    const plan = planRecovery(db, 5, () => false);
 
     expect(plan[0]).toMatchObject({ action: "stop" });
     expect(plan[0]?.action === "stop" && plan[0].reason).toContain("working tree");
@@ -78,42 +78,59 @@ describe("planRecovery", () => {
       appendEvent(db, id, "mission.resumed", {});
     }
 
-    expect(planRecovery(db, alwaysExists)[0]).toMatchObject({ action: "stop" });
+    expect(planRecovery(db, 5, alwaysExists)[0]).toMatchObject({ action: "stop" });
   });
 
   it("still resumes one that has been resumed fewer times than that", () => {
     const id = interrupted({ session: "s1" });
     appendEvent(db, id, "mission.resumed", {});
 
-    expect(planRecovery(db, alwaysExists)[0]).toMatchObject({ action: "resume" });
+    expect(planRecovery(db, 5, alwaysExists)[0]).toMatchObject({ action: "resume" });
   });
 
-  // Each resume replays context and costs tokens, so a boot after a long
-  // outage should not silently spend a fortune.
-  it("caps how many come back at once", () => {
-    for (let i = 0; i < MAX_RESUMED_PER_BOOT + 2; i += 1) {
-      interrupted({ session: `s${i}` });
-    }
+  // A resumed mission is an agent like any other. Bringing back more than the
+  // box was told to run is how a restart recreated the pile-up the cap exists
+  // to prevent.
+  it("brings back no more than the concurrency cap allows", () => {
+    for (let i = 0; i < 5; i += 1) interrupted({ session: `s${i}` });
 
-    const plan = planRecovery(db, alwaysExists);
+    const plan = planRecovery(db, 2, alwaysExists);
 
-    expect(plan.filter((entry) => entry.action === "resume")).toHaveLength(
-      MAX_RESUMED_PER_BOOT,
-    );
-    expect(plan.filter((entry) => entry.action === "stop")).toHaveLength(2);
+    expect(plan.filter((entry) => entry.action === "resume")).toHaveLength(2);
+  });
+
+  // Waiting is not the same as being abandoned. The work is still there, and a
+  // slot will free.
+  it("queues the rest rather than stopping them", () => {
+    for (let i = 0; i < 5; i += 1) interrupted({ session: `s${i}` });
+
+    const plan = planRecovery(db, 2, alwaysExists);
+
+    expect(plan.filter((entry) => entry.action === "queue")).toHaveLength(3);
+    expect(plan.filter((entry) => entry.action === "stop")).toHaveLength(0);
+  });
+
+  // The ones that cannot come back at all are still stopped, and still say why.
+  it("still stops what it cannot resume, whatever the cap", () => {
+    interrupted();
+
+    expect(planRecovery(db, 5, alwaysExists)[0]).toMatchObject({
+      action: "stop",
+      reason: "no session to resume",
+    });
   });
 
   it("ignores missions that already finished", () => {
     const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
     setStatus(db, mission.id, MISSION_STATUS.DONE);
 
-    expect(planRecovery(db, alwaysExists)).toHaveLength(0);
+    expect(planRecovery(db, 5, alwaysExists)).toHaveLength(0);
   });
 
   it("ignores archived missions", () => {
     const id = interrupted({ session: "s1" });
     archiveMission(db, id);
 
-    expect(planRecovery(db, alwaysExists)).toHaveLength(0);
+    expect(planRecovery(db, 5, alwaysExists)).toHaveLength(0);
   });
 });
