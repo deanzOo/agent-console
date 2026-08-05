@@ -33,12 +33,15 @@ describe("POST /api/sync", () => {
     });
   });
 
-  // A cap here once truncated silently and a sync that reached a fraction of
-  // the repositories reported plain success.
-  it("syncs issues for every repository that has them", async () => {
+  // Every repository, not only the ones with issues to fetch: a repository whose
+  // last issue was closed still has rows here that have to go.
+  it("hands the whole repository picture to the issue sync", async () => {
     await POST();
 
-    expect(syncIssues).toHaveBeenCalledWith({}, "g", ["acme/widget"]);
+    expect(syncIssues).toHaveBeenCalledWith({}, "g", {
+      all: [1, 2, 3],
+      withOpenIssues: ["acme/widget"],
+    });
   });
 
   // One integration being down must not hide the other's results, which is the

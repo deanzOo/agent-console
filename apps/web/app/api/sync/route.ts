@@ -26,7 +26,7 @@ export async function POST() {
       // that used to live here truncated silently, so a sync that reached a
       // fraction of the repositories reported plain success.
       const synced = await syncRepos(db, resolved.githubToken);
-      result.issues = await syncIssues(db, resolved.githubToken, synced.withOpenIssues);
+      result.issues = await syncIssues(db, resolved.githubToken, synced);
       result.repos = synced.all.length;
       result.reposWithIssues = synced.withOpenIssues.length;
     } catch (error) {
