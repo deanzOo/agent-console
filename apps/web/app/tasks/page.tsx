@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { getConfig } from "@agent-console/core/env";
 import { getFeatures } from "@agent-console/core/features";
 import { getDatabase } from "@agent-console/core/db";
+import { latestMissionsBySourceRef } from "@agent-console/core/missions";
+import { MISSION_SOURCE } from "@agent-console/core/schema";
 import {
   listTaskPage,
   listTaskProjects,
@@ -10,6 +12,7 @@ import {
 import { resolveCredentials } from "@agent-console/core/settings";
 import { FilterBar } from "../filter-bar";
 import { Pager } from "../pager";
+import { SourceLaunch } from "../source-launch";
 import { StartFromSource } from "../start-from-source";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +52,11 @@ export default async function TasksPage({
   });
   const projects = listTaskProjects(db);
   const workspaces = listTaskWorkspaces(db);
+  const missionsBySource = latestMissionsBySourceRef(
+    db,
+    MISSION_SOURCE.ASANA,
+    tasks.map((task) => task.gid),
+  );
 
   return (
     <main className="space-y-4">
@@ -83,27 +91,32 @@ export default async function TasksPage({
         </p>
       ) : (
         <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">
-          {tasks.map((task) => (
-            <li key={task.gid} className="py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{task.name}</p>
-                  <p className="truncate text-xs text-neutral-500">
-                    {task.project ?? "no project"}
-                    {task.dueOn ? ` · due ${task.dueOn}` : ""}
-                  </p>
+          {tasks.map((task) => {
+            const mission = missionsBySource.get(task.gid);
+            return (
+              <li key={task.gid} className="py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{task.name}</p>
+                    <p className="truncate text-xs text-neutral-500">
+                      {task.project ?? "no project"}
+                      {task.dueOn ? ` · due ${task.dueOn}` : ""}
+                    </p>
+                  </div>
+                  <SourceLaunch mission={mission}>
+                    <StartFromSource
+                      source="asana"
+                      sourceRef={task.gid}
+                      title={task.name}
+                      prompt={`Work on the Asana task "${task.name}".${
+                        task.permalink ? `\n\n${task.permalink}` : ""
+                      }\n\nAsk me which repository to work in if it is not obvious.`}
+                    />
+                  </SourceLaunch>
                 </div>
-                <StartFromSource
-                  source="asana"
-                  sourceRef={task.gid}
-                  title={task.name}
-                  prompt={`Work on the Asana task "${task.name}".${
-                    task.permalink ? `\n\n${task.permalink}` : ""
-                  }\n\nAsk me which repository to work in if it is not obvious.`}
-                />
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
 

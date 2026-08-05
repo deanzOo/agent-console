@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getDatabase } from "@agent-console/core/db";
 import { getMission, listEvents, openPrompts } from "@agent-console/core/missions";
+import { sourceLinkFor } from "@agent-console/core/source-link";
 import { MissionLive } from "./mission-live";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ export default async function MissionPage({
         branch: mission.branch,
         worktreePath: mission.worktreePath,
       }}
+      source={sourceLinkFor(db, mission) ?? null}
       initialEvents={listEvents(db, id, 0)}
       initialPrompts={openPrompts(db, id)}
     />

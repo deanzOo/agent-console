@@ -8,9 +8,12 @@ import {
   listIssuePage,
   listIssueRepos,
 } from "@agent-console/core/issues";
+import { latestMissionsBySourceRef } from "@agent-console/core/missions";
+import { MISSION_SOURCE } from "@agent-console/core/schema";
 import { resolveCredentials } from "@agent-console/core/settings";
 import { FilterBar } from "../filter-bar";
 import { Pager } from "../pager";
+import { SourceLaunch } from "../source-launch";
 import { StartFromSource } from "../start-from-source";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +56,11 @@ export default async function IssuesPage({
   const orgs = listIssueOrgs(db);
   const repos = listIssueRepos(db, { org });
   const labels = listIssueLabels(db, { org, repo });
+  const missionsBySource = latestMissionsBySourceRef(
+    db,
+    MISSION_SOURCE.GITHUB,
+    issues.map((issue) => `${issue.repo}#${issue.number}`),
+  );
 
   return (
     <main className="space-y-4">
@@ -90,25 +98,31 @@ export default async function IssuesPage({
         </p>
       ) : (
         <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">
-          {issues.map((issue) => (
-            <li key={`${issue.repo}#${issue.number}`} className="py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{issue.title}</p>
-                  <p className="truncate text-xs text-neutral-500">
-                    {issue.repo} #{issue.number}
-                  </p>
+          {issues.map((issue) => {
+            const sourceRef = `${issue.repo}#${issue.number}`;
+            const mission = missionsBySource.get(sourceRef);
+            return (
+              <li key={sourceRef} className="py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{issue.title}</p>
+                    <p className="truncate text-xs text-neutral-500">
+                      {issue.repo} #{issue.number}
+                    </p>
+                  </div>
+                  <SourceLaunch mission={mission}>
+                    <StartFromSource
+                      source="github"
+                      sourceRef={sourceRef}
+                      repo={issue.repo}
+                      title={issue.title}
+                      prompt={`Work on ${issue.repo} issue #${issue.number}: ${issue.title}\n\n${issue.url}\n\nRead the issue, make the change on a new branch, and open a pull request.`}
+                    />
+                  </SourceLaunch>
                 </div>
-                <StartFromSource
-                  source="github"
-                  sourceRef={`${issue.repo}#${issue.number}`}
-                  repo={issue.repo}
-                  title={issue.title}
-                  prompt={`Work on ${issue.repo} issue #${issue.number}: ${issue.title}\n\n${issue.url}\n\nRead the issue, make the change on a new branch, and open a pull request.`}
-                />
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
 
