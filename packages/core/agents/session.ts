@@ -105,6 +105,18 @@ export class MissionSession {
     await this.#run?.interrupt();
   }
 
+  /**
+   * Settles when the session itself ends, which is not when the mission says
+   * done.
+   *
+   * Streaming input keeps a session open after the agent finishes a turn, so
+   * `done` describes the conversation while the process is still there holding
+   * memory. Anything counting what the box is running has to wait for this.
+   */
+  async whenFinished(): Promise<void> {
+    await this.#finished;
+  }
+
   async stop(): Promise<void> {
     this.#pending.cancelAll("Session stopped.");
     this.#run?.close();
