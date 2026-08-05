@@ -22,11 +22,10 @@ services:
       # instead — and note macOS keeps that credential in the Keychain, not on
       # disk, so the mount carries nothing there.
       # - ${CLAUDE_CONFIG_DIR:-~/.claude}:/home/agent/.claude
-      # Uncomment to give missions an Open Knowledge Format bundle describing
-      # this deployment, and set KNOWLEDGE_BUNDLE_PATH=/knowledge in .env to
-      # match. Read-only: agents read this, they do not maintain it. Keep the
-      # bundle outside the checkout - it describes your servers.
-      # - ${KNOWLEDGE_BUNDLE_HOST_PATH:-/opt/agent-knowledge}:/knowledge:ro
+      # An Open Knowledge Format bundle describing this deployment goes in
+      # docker-compose.override.yml rather than here: a deploy resets this
+      # checkout, and the mount is specific to one server. See
+      # docs/how-to/docker.md.
       # Uncomment to read the host's CPU/memory/network/disk numbers instead
       # of the container's own, and set HOST_PROC_PATH=/host/proc in .env to
       # match.

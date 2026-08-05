@@ -91,7 +91,20 @@ sudo cp -r okf.example/* /opt/agent-knowledge/
 sudo $EDITOR /opt/agent-knowledge/runbooks/redeploy.md
 ```
 
-Then uncomment the `/knowledge` volume in `docker-compose.yml`, and in `.env`:
+Then mount it. Editing `docker-compose.yml` on a server does not survive a
+deploy — `scripts/deploy.sh` resets the checkout — so put deployment-specific
+compose changes in `docker-compose.override.yml`, which compose merges
+automatically and git ignores:
+
+```yaml
+# /opt/agent-console/docker-compose.override.yml
+services:
+  agent-console:
+    volumes:
+      - /opt/agent-knowledge:/knowledge:ro
+```
+
+And in `.env`:
 
 ```bash
 KNOWLEDGE_BUNDLE_PATH=/knowledge

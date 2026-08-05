@@ -29,3 +29,7 @@ reports/
 
 # Turborepo's local task cache — a build artifact, never committed.
 .turbo/
+
+# Deployment-specific compose changes. A deploy resets the checkout, so an edit
+# to docker-compose.yml on a server does not survive one - this does.
+docker-compose.override.yml
