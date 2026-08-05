@@ -54,6 +54,7 @@ export function Nav() {
           Tasks <Count value={tasks} />
         </Link>
       )}
+      <Link href="/stats">Stats</Link>
       <Link href="/disk">Disk</Link>
       {features.push && (
         <span className={showSync ? "" : "ml-auto"}>
