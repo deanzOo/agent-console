@@ -1,6 +1,6 @@
 # The agent runs real commands, so the container is also the sandbox boundary.
 # Everything the agent needs — git, the Claude CLI — lives inside the image.
-FROM node:22-bookworm-slim AS deps
+FROM node:25-bookworm-slim AS deps
 WORKDIR /app
 # better-sqlite3 has no prebuilt binary for this image and compiles from source,
 # so the toolchain is needed here. It stays in this stage — the runtime image
@@ -28,7 +28,7 @@ WORKDIR /app
 # pruning has no need to run any.
 RUN npm prune --omit=dev --ignore-scripts
 
-FROM node:22-bookworm-slim AS build
+FROM node:25-bookworm-slim AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
@@ -37,7 +37,7 @@ COPY . .
 # turbo.json owns the web/agentd build order, so there is nothing to chain here.
 RUN AUTH_MODE=trusted-network npm run build
 
-FROM node:22-bookworm-slim AS runtime
+FROM node:25-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
