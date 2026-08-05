@@ -99,6 +99,14 @@ export function stopMission(missionId: string): Promise<AgentdOutcome<unknown>> 
   );
 }
 
+export function resumeMission(missionId: string): Promise<AgentdOutcome<unknown>> {
+  return send(
+    `/missions/${encodeURIComponent(missionId)}/resume`,
+    { method: "POST" },
+    asJson,
+  );
+}
+
 export function sayToMission(
   missionId: string,
   text: string,

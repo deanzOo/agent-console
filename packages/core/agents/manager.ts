@@ -14,7 +14,7 @@ import { branchNameFor } from "../repos";
 import { createWorktree, defaultBranch, ensureBareClone } from "../git";
 import { closeOpenPrompts } from "./orphans";
 import { concurrencyLimit, hasCapacity, nextQueued } from "./queue";
-import { planRecovery } from "./recover";
+import { canResumeManually, planRecovery, type ManualResume } from "./recover";
 import { createSdkDriver } from "./driver";
 import { MissionSession } from "./session";
 import { createMission } from "../missions";
@@ -285,6 +285,15 @@ export async function drainQueue(): Promise<number> {
   return started;
 }
 
+/** Marks a mission queued rather than starting it, and says why in the transcript. */
+function queueMission(db: Db, mission: Mission, note: string): void {
+  setStatus(db, mission.id, MISSION_STATUS.QUEUED);
+  appendEvent(db, mission.id, "mission.status", {
+    status: MISSION_STATUS.QUEUED,
+    note,
+  });
+}
+
 export async function launchMission(input: LaunchInput): Promise<string> {
   const db = getDatabase();
 
@@ -299,11 +308,7 @@ export async function launchMission(input: LaunchInput): Promise<string> {
   // Accepted either way. What changes is whether it starts now or waits, and
   // the operator sees which from the mission's own status.
   if (!hasCapacity(runningCount(), concurrencyLimit(db))) {
-    setStatus(db, mission.id, MISSION_STATUS.QUEUED);
-    appendEvent(db, mission.id, "mission.status", {
-      status: MISSION_STATUS.QUEUED,
-      note: "waiting for a free slot",
-    });
+    queueMission(db, mission, "waiting for a free slot");
     return mission.id;
   }
 
@@ -357,11 +362,11 @@ export async function recoverMissions(): Promise<{ resumed: number; stopped: num
     // Waiting, not abandoned: it keeps its tree and its place, and starts when
     // a slot frees.
     if (plan.action === "queue") {
-      setStatus(db, mission.id, MISSION_STATUS.QUEUED);
-      appendEvent(db, mission.id, "mission.status", {
-        status: MISSION_STATUS.QUEUED,
-        note: "waiting for a free slot after the session host restarted",
-      });
+      queueMission(
+        db,
+        mission,
+        "waiting for a free slot after the session host restarted",
+      );
       continue;
     }
 
@@ -401,4 +406,31 @@ export async function stopMission(missionId: string): Promise<void> {
   setStatus(db, missionId, "stopped");
   const mission = getMission(db, missionId);
   if (mission) await releaseSourcePickup(db, mission);
+}
+
+/**
+ * Brings a mission back on the operator's word rather than the recovery
+ * sweep's — the same `resumeSession` recovery itself uses, so the transcript
+ * reads the same either way.
+ *
+ * Still obeys the concurrency cap: a resumed mission is an agent like any
+ * other, and skipping the cap here is how a click recreates the pile-up it
+ * exists to prevent. What it does not obey is `MAX_RESUME_ATTEMPTS` — that
+ * check lives in `canResumeManually`, which deliberately leaves it out.
+ */
+export function resumeMission(missionId: string): ManualResume {
+  const db = getDatabase();
+  const mission = getMission(db, missionId);
+  if (!mission) return { ok: false, reason: "mission no longer exists" };
+
+  const eligibility = canResumeManually(mission);
+  if (!eligibility.ok) return eligibility;
+
+  if (!hasCapacity(runningCount(), concurrencyLimit(db))) {
+    queueMission(db, mission, "waiting for a free slot");
+    return { ok: true };
+  }
+
+  resumeSession(mission);
+  return { ok: true };
 }

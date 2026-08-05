@@ -7,12 +7,13 @@ import {
   appendEvent,
   archiveMission,
   createMission,
+  getMission,
   recordWorkspace,
   setSessionId,
   setStatus,
 } from "../missions";
 import { MISSION_STATUS } from "../schema";
-import { MAX_RESUME_ATTEMPTS, planRecovery } from "./recover";
+import { canResumeManually, MAX_RESUME_ATTEMPTS, planRecovery } from "./recover";
 
 let dir: string;
 let db: Db;
@@ -37,6 +38,14 @@ function interrupted(options: { session?: string | undefined; tree?: string } = 
     recordWorkspace(db, mission.id, { branch: "b", worktreePath: options.tree });
   }
   return mission.id;
+}
+
+function stopped(options: { session?: string | undefined; tree?: string } = {}) {
+  const id = interrupted(options);
+  setStatus(db, id, MISSION_STATUS.STOPPED);
+  const mission = getMission(db, id);
+  if (!mission) throw new Error("mission vanished");
+  return mission;
 }
 
 describe("planRecovery", () => {
@@ -132,5 +141,60 @@ describe("planRecovery", () => {
     archiveMission(db, id);
 
     expect(planRecovery(db, 5, alwaysExists)).toHaveLength(0);
+  });
+});
+
+describe("canResumeManually", () => {
+  it("allows a stopped mission with a session and a working tree", () => {
+    const mission = stopped({ session: "s1", tree: "/tree" });
+
+    expect(canResumeManually(mission, alwaysExists)).toEqual({ ok: true });
+  });
+
+  it("allows a stopped mission with a session and no working tree at all", () => {
+    const mission = stopped({ session: "s1" });
+
+    expect(canResumeManually(mission, alwaysExists)).toEqual({ ok: true });
+  });
+
+  it("refuses a mission that is not stopped", () => {
+    const id = interrupted({ session: "s1" });
+    const mission = getMission(db, id);
+    if (!mission) throw new Error("mission vanished");
+
+    expect(canResumeManually(mission, alwaysExists)).toEqual({
+      ok: false,
+      reason: "only a stopped mission can be resumed",
+    });
+  });
+
+  it("refuses one that never had a session", () => {
+    const mission = stopped();
+
+    expect(canResumeManually(mission, alwaysExists)).toEqual({
+      ok: false,
+      reason: "it never had a session to resume",
+    });
+  });
+
+  it("refuses one whose working tree is gone", () => {
+    const mission = stopped({ session: "s1", tree: "/gone" });
+
+    expect(canResumeManually(mission, () => false)).toEqual({
+      ok: false,
+      reason: "its working tree is gone",
+    });
+  });
+
+  // The attempt counter exists to stop a boot loop from resuming the same
+  // mission forever on its own. An operator asking for it once by hand is a
+  // different signal and must not be blocked by the same counter.
+  it("does not count previous resume attempts against a manual request", () => {
+    const mission = stopped({ session: "s1" });
+    for (let i = 0; i < MAX_RESUME_ATTEMPTS + 5; i += 1) {
+      appendEvent(db, mission.id, "mission.resumed", {});
+    }
+
+    expect(canResumeManually(mission, alwaysExists)).toEqual({ ok: true });
   });
 });
