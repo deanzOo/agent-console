@@ -76,3 +76,31 @@ The container needs its own credentials to push:
   They are discarded with that stage — the runtime image has no compiler. Expect the first build to take a
   few minutes; later ones hit the layer cache.
 - The container runs as uid 10001, never root.
+
+## Giving missions a knowledge bundle
+
+Agents are told the task and given the repository. They are told nothing about
+your deployment — which host, which base branch, what a redeploy does to a
+running mission — unless you write it down.
+
+```bash
+# Outside the checkout: a deploy replaces that directory, and the bundle
+# describes your servers, so it does not belong in a public repository.
+sudo mkdir -p /opt/agent-knowledge
+sudo cp -r okf.example/* /opt/agent-knowledge/
+sudo $EDITOR /opt/agent-knowledge/runbooks/redeploy.md
+```
+
+Then uncomment the `/knowledge` volume in `docker-compose.yml`, and in `.env`:
+
+```bash
+KNOWLEDGE_BUNDLE_PATH=/knowledge
+```
+
+The path is the one **inside** the container, so it matches the mount rather
+than the host. Missions are given a list of what the bundle contains and where
+to read each entry; they open what the task needs.
+
+Two rules, repeated because they matter: the bundle never goes in the
+repository, and it never holds a token. Agents read these files, and an agent
+has a shell.
