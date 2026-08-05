@@ -70,6 +70,13 @@ jobs:
       - name: Build the image
         run: docker build -t agent-console:ci .
 
+      # The agent CLI is installed into the image and every mission starts by
+      # spawning it. A broken install is invisible to every other check and
+      # only shows up as a mission that dies at startup - which is how it
+      # shipped once already.
+      - name: The agent CLI runs
+        run: docker run --rm agent-console:ci claude --version
+
       - name: Trivy (image gate)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
