@@ -25,6 +25,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      # Docker requires a lowercase repository name and GitHub preserves the
+      # owner's capitals, so the two disagree for any owner with an uppercase
+      # letter — as here. Actions expressions have no lower-casing function.
+      - name: Name the image
+        id: image
+        run: echo "repo=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -41,12 +48,12 @@ jobs:
           # The commit tag is what a deploy asks for: `main` moves, and a deploy
           # that pulls a moving tag cannot say what it installed.
           tags: |
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
-            ghcr.io/${{ github.repository }}:main
+            ghcr.io/${{ steps.image.outputs.repo }}:${{ github.sha }}
+            ghcr.io/${{ steps.image.outputs.repo }}:main
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       # The image is what an operator runs, and a broken CLI inside it is
       # invisible to every other check — it shipped once already.
       - name: The agent CLI runs
-        run: docker run --rm ghcr.io/${{ github.repository }}:${{ github.sha }} claude --version
+        run: docker run --rm ghcr.io/${{ steps.image.outputs.repo }}:${{ github.sha }} claude --version

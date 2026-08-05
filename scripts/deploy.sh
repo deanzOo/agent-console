@@ -55,7 +55,9 @@ ssh "$DEPLOY_HOST" "cd '$DEPLOY_PATH' && git fetch --quiet origin && git reset -
 # the tag for the exact commit, so a deploy can say what it installed.
 sha="$(ssh "$DEPLOY_HOST" "cd '$DEPLOY_PATH' && git rev-parse HEAD")" \
   || fail "Could not read the deployed commit"
-image="ghcr.io/${IMAGE_REPO:-deanzOo/agent-console}:${sha}"
+# Lowercase: a registry rejects anything else, and the owner's name has a
+# capital in it.
+image="ghcr.io/${IMAGE_REPO:-deanzoo/agent-console}:${sha}"
 
 step "Pulling ${image##*/}"
 pull_started=$(date +%s)
