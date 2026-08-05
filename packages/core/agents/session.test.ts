@@ -389,6 +389,31 @@ describe("finishing a turn", () => {
     expect(getMission(db, mission.id)?.status).toBe("running");
   });
 
+  // The distinction that leaked: eight processes were alive for two missions
+  // the console believed had finished, because a result arrives at the end of
+  // every turn and was read as the end of the session.
+  it("does not finish when the agent finishes a turn", async () => {
+    const fake = fakeDriver();
+    const { mission, session } = start(fake);
+    let finished = false;
+    void session.whenFinished().then(() => {
+      finished = true;
+    });
+
+    fake.emit(resultMessage());
+    await settle();
+
+    // The conversation is finished. The session is not, and it is still holding
+    // a process — which is what anything counting capacity has to wait for.
+    expect(getMission(db, mission.id)?.status).toBe("done");
+    expect(finished).toBe(false);
+
+    fake.finish();
+    await settle();
+
+    expect(finished).toBe(true);
+  });
+
   // The session is still live and still resumable, so it must stay in the
   // registry: the operator can reply to a finished mission and carry on.
   it("leaves the session able to take a reply", async () => {

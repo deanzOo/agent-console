@@ -95,6 +95,7 @@ async function startMission(missionId: string, input: LaunchInput): Promise<void
     const session = new MissionSession(db, mission.id);
     sessions.set(mission.id, session);
     releaseSlotWhenFinished(mission.id, session);
+    closeWhenIdle(mission.id, session);
 
     session.start(createSdkDriver(githubToken(db)), {
       missionId: mission.id,
@@ -126,22 +127,70 @@ const TERMINAL = [
 ] as const;
 
 /**
- * Frees the slot when a mission ends, and gives it to whoever is waiting.
+ * How long a finished session is kept open for the operator to say one more
+ * thing.
  *
- * Listening to the transcript rather than the session's own lifetime: every way
- * a mission can end already records its status there, so there is one place to
- * watch instead of one per ending.
+ * Streaming input is what makes a reply possible after the agent stops, and it
+ * is also what keeps a whole process alive holding memory. Waiting forever is
+ * what left eight of them running; closing immediately would take away the
+ * follow-up the open stream exists for.
  */
-function releaseSlotWhenFinished(missionId: string, session: MissionSession): void {
-  const stop = session.subscribe((event) => {
+const IDLE_SESSION_MS = 30 * 60_000;
+
+/**
+ * Closes a session that finished and was never spoken to again.
+ *
+ * The mission keeps whatever status it reached — this ends the process, it does
+ * not change what happened. Replying before the timer clears it, because the
+ * mission goes back to running and that is not a terminal status.
+ */
+function closeWhenIdle(missionId: string, session: MissionSession): void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const unsubscribe = session.subscribe((event) => {
     if (event.type !== "mission.status") return;
     const status = Object(event.payload).status;
+
+    if (timer) {
+      clearTimeout(timer);
+      timer = undefined;
+    }
     if (!TERMINAL.some((terminal) => terminal === status)) return;
 
-    stop();
-    sessions.delete(missionId);
-    void drainQueue().catch(() => undefined);
+    timer = setTimeout(() => {
+      void session.stop().catch(() => undefined);
+    }, IDLE_SESSION_MS);
+    // Nothing should be kept alive by this alone.
+    timer.unref?.();
   });
+
+  void session
+    .whenFinished()
+    .catch(() => undefined)
+    .finally(() => {
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+    });
+}
+
+/**
+ * Frees the slot when the session ends — not when the mission says done.
+ *
+ * These are different moments and treating them as one is what leaked: the
+ * agent emits a result at the end of every turn, so a mission reads as done
+ * while its process is still alive waiting for the operator to say more. Eight
+ * such processes were live for two missions the console believed were running.
+ *
+ * The slot belongs to the process, so it is released when the process is gone.
+ */
+function releaseSlotWhenFinished(missionId: string, session: MissionSession): void {
+  void session
+    .whenFinished()
+    .catch(() => undefined)
+    .finally(() => {
+      sessions.delete(missionId);
+      void drainQueue().catch(() => undefined);
+    });
 }
 
 /**
@@ -278,6 +327,7 @@ export async function recoverMissions(): Promise<{ resumed: number; stopped: num
     const session = new MissionSession(db, mission.id);
     sessions.set(mission.id, session);
     releaseSlotWhenFinished(mission.id, session);
+    closeWhenIdle(mission.id, session);
     session.start(createSdkDriver(githubToken(db)), {
       missionId: mission.id,
       prompt: "Continue where you left off.",
