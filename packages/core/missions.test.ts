@@ -12,6 +12,8 @@ import {
   archiveMission,
   createMission,
   getMission,
+  isLiveStatus,
+  latestMissionsBySourceRef,
   listEvents,
   listMissionsWithWorktree,
   recordWorkspace,
@@ -287,6 +289,64 @@ describe("listMissions", () => {
     const second = newMission({ title: "second" });
     const ids = listMissions(db).map((mission) => mission.id);
     expect(ids.indexOf(second.id)).toBeLessThan(ids.indexOf(first.id));
+  });
+});
+
+describe("latestMissionsBySourceRef", () => {
+  it("finds the mission launched from a given issue", () => {
+    const mission = newMission({ source: "github", sourceRef: "acme/widget#7" });
+    const map = latestMissionsBySourceRef(db, "github", ["acme/widget#7"]);
+    expect(map.get("acme/widget#7")?.id).toBe(mission.id);
+  });
+
+  it("says nothing about a ref with no mission", () => {
+    const map = latestMissionsBySourceRef(db, "github", ["acme/widget#9"]);
+    expect(map.has("acme/widget#9")).toBe(false);
+  });
+
+  // The issue page relaunches from the same row, so the badge has to track
+  // whichever attempt is current rather than the first one that ever ran.
+  it("keeps only the most recent mission per ref", () => {
+    newMission({ source: "github", sourceRef: "acme/widget#7", title: "first try" });
+    const retry = newMission({
+      source: "github",
+      sourceRef: "acme/widget#7",
+      title: "second try",
+    });
+    const map = latestMissionsBySourceRef(db, "github", ["acme/widget#7"]);
+    expect(map.get("acme/widget#7")?.id).toBe(retry.id);
+  });
+
+  it("does not cross sources with the same ref text", () => {
+    newMission({ source: "asana", sourceRef: "acme/widget#7" });
+    const map = latestMissionsBySourceRef(db, "github", ["acme/widget#7"]);
+    expect(map.has("acme/widget#7")).toBe(false);
+  });
+
+  it("ignores an archived mission", () => {
+    const mission = newMission({ source: "github", sourceRef: "acme/widget#7" });
+    archiveMission(db, mission.id);
+    const map = latestMissionsBySourceRef(db, "github", ["acme/widget#7"]);
+    expect(map.has("acme/widget#7")).toBe(false);
+  });
+
+  it("returns nothing for an empty list of refs", () => {
+    newMission({ source: "github", sourceRef: "acme/widget#7" });
+    expect(latestMissionsBySourceRef(db, "github", [])).toEqual(new Map());
+  });
+});
+
+describe("isLiveStatus", () => {
+  it("treats starting, running and awaiting_input as live", () => {
+    expect(isLiveStatus(MISSION_STATUS.STARTING)).toBe(true);
+    expect(isLiveStatus(MISSION_STATUS.RUNNING)).toBe(true);
+    expect(isLiveStatus(MISSION_STATUS.AWAITING_INPUT)).toBe(true);
+  });
+
+  it("treats done, failed and stopped as not live", () => {
+    expect(isLiveStatus(MISSION_STATUS.DONE)).toBe(false);
+    expect(isLiveStatus(MISSION_STATUS.FAILED)).toBe(false);
+    expect(isLiveStatus(MISSION_STATUS.STOPPED)).toBe(false);
   });
 });
 

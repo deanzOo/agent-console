@@ -19,6 +19,7 @@ import { createSdkDriver } from "./driver";
 import { MissionSession } from "./session";
 import { createMission } from "../missions";
 import { describeBundle, readBundle } from "../okf";
+import { markSourcePickedUp, releaseSourcePickup } from "../pickup";
 import { resolveCredentials } from "../settings";
 
 /**
@@ -82,7 +83,18 @@ function withKnowledge(prompt: string, bundlePath: string | undefined): string {
 async function startMission(missionId: string, input: LaunchInput): Promise<void> {
   const db = getDatabase();
   const config = getConfig();
-  const mission = { id: missionId };
+  // The row, not an id in a wrapper: callers here need what the mission is —
+  // its source, its repository — and a stub was only ever enough for the paths
+  // that existed when this was extracted.
+  const mission = getMission(db, missionId);
+  if (!mission) throw new Error(`mission ${missionId} no longer exists`);
+
+  // Tells the issue or task an agent has taken it, so another agent — or the
+  // operator on another device — does not pick up the same one. Awaited
+  // alongside the clone below rather than fired and forgotten: launching
+  // already waits on GitHub for the workspace, so this adds no new kind of
+  // delay, only a predictable one.
+  await markSourcePickedUp(db, mission);
 
   try {
     const cwd = (await prepareWorkspace(db, mission.id, input)) ?? config.workspaceRoot;
@@ -116,6 +128,7 @@ async function startMission(missionId: string, input: LaunchInput): Promise<void
       status: "failed",
       error: error instanceof Error ? error.message : String(error),
     });
+    await releaseSourcePickup(db, mission);
     throw error;
   }
 }
@@ -354,6 +367,7 @@ export async function recoverMissions(): Promise<{ resumed: number; stopped: num
         status: MISSION_STATUS.STOPPED,
         error: `The session host restarted and this mission was not resumed: ${plan.reason}.`,
       });
+      await releaseSourcePickup(db, mission);
       stopped += 1;
       continue;
     }
@@ -377,5 +391,9 @@ export async function stopMission(missionId: string): Promise<void> {
   if (!session) return;
   sessions.delete(missionId);
   await session.stop();
-  setStatus(getDatabase(), missionId, "stopped");
+
+  const db = getDatabase();
+  setStatus(db, missionId, "stopped");
+  const mission = getMission(db, missionId);
+  if (mission) await releaseSourcePickup(db, mission);
 }

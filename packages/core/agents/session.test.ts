@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -7,12 +7,18 @@ import { openDatabase, type Db } from "../db";
 import { createMission, getMission, listEvents, openPrompts } from "../missions";
 import { MissionSession, type AgentDriver, type AgentRun } from "./session";
 
+const { releaseSourcePickup } = vi.hoisted(() => ({
+  releaseSourcePickup: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../pickup", () => ({ releaseSourcePickup }));
+
 let dir: string;
 let db: Db;
 
 beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), "claudevps-session-"));
   db = openDatabase(path.join(dir, "data.db"));
+  releaseSourcePickup.mockClear();
 });
 
 afterEach(() => {
@@ -204,6 +210,73 @@ describe("MissionSession", () => {
     expect(getMission(db, mission.id)?.status).toBe("failed");
     const last = listEvents(db, mission.id, 0).at(-1);
     expect(last?.payload).toMatchObject({ error: "model unreachable" });
+  });
+
+  // Done and failed both mean the mission is no longer the one working its
+  // issue or task, so whichever one it reaches should let the source go.
+  it("releases the mission's source once it finishes", async () => {
+    const fake = fakeDriver();
+    const mission = createMission(db, {
+      title: "t",
+      source: "github",
+      sourceRef: "acme/widget#7",
+      repo: "acme/widget",
+      prompt: "do it",
+    });
+    new MissionSession(db, mission.id).start(fake.driver, {
+      missionId: mission.id,
+      prompt: "do it",
+      cwd: dir,
+    });
+    fake.finish();
+    await settle();
+
+    expect(releaseSourcePickup).toHaveBeenCalledTimes(1);
+    expect(releaseSourcePickup.mock.calls[0]?.[1]).toMatchObject({ id: mission.id });
+  });
+
+  it("releases the mission's source once it fails", async () => {
+    const fake = fakeDriver();
+    const mission = createMission(db, {
+      title: "t",
+      source: "github",
+      sourceRef: "acme/widget#7",
+      repo: "acme/widget",
+      prompt: "do it",
+    });
+    new MissionSession(db, mission.id).start(fake.driver, {
+      missionId: mission.id,
+      prompt: "do it",
+      cwd: dir,
+    });
+    fake.fail(new Error("boom"));
+    await settle();
+
+    expect(releaseSourcePickup).toHaveBeenCalledTimes(1);
+  });
+
+  // Awaiting input is the middle of a mission, not the end of one — releasing
+  // the source there would tell the issue an agent is no longer on it while
+  // an approval sits waiting for the operator.
+  it("does not release the source while only awaiting input", async () => {
+    const fake = fakeDriver();
+    const mission = createMission(db, {
+      title: "t",
+      source: "github",
+      sourceRef: "acme/widget#7",
+      repo: "acme/widget",
+      prompt: "do it",
+    });
+    new MissionSession(db, mission.id).start(fake.driver, {
+      missionId: mission.id,
+      prompt: "do it",
+      cwd: dir,
+    });
+    fake.requestTool("Bash", { command: "ls" });
+    await settle();
+
+    expect(getMission(db, mission.id)?.status).toBe("awaiting_input");
+    expect(releaseSourcePickup).not.toHaveBeenCalled();
   });
 
   describe("permission requests", () => {

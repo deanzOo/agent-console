@@ -25,12 +25,19 @@ interface MissionView {
   readonly worktreePath: string | null;
 }
 
+interface SourceView {
+  readonly label: string;
+  readonly url: string | undefined;
+}
+
 export function MissionLive({
   mission,
+  source,
   initialEvents,
   initialPrompts,
 }: {
   mission: MissionView;
+  source: SourceView | null;
   initialEvents: StoredEvent[];
   initialPrompts: OpenPrompt[];
 }) {
@@ -116,6 +123,23 @@ export function MissionLive({
           {mission.repo ? ` · ${mission.repo}` : ""}
           {mission.branch ? ` · ${mission.branch}` : ""}
         </p>
+        {source && (
+          <p className="text-xs text-neutral-500">
+            From:{" "}
+            {source.url ? (
+              <a
+                href={source.url}
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
+                {source.label}
+              </a>
+            ) : (
+              source.label
+            )}
+          </p>
+        )}
         <div className="mt-2">
           <MissionActions
             missionId={mission.id}

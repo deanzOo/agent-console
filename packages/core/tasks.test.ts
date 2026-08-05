@@ -7,6 +7,7 @@ import { asanaCache } from "./schema";
 import {
   UNFILED,
   countTasks,
+  getCachedTask,
   listTaskPage,
   listTaskProjects,
   listTaskWorkspaces,
@@ -181,5 +182,15 @@ describe("countTasks", () => {
   it("counts what matches a filter", () => {
     expect(countTasks(db, { project: "Billing" })).toBe(2);
     expect(countTasks(db, { completed: true })).toBe(1);
+  });
+});
+
+describe("getCachedTask", () => {
+  it("finds a task by its gid", () => {
+    expect(getCachedTask(db, "3")?.name).toBe("Write the launch post");
+  });
+
+  it("returns nothing for a gid that was never cached", () => {
+    expect(getCachedTask(db, "does-not-exist")).toBeUndefined();
   });
 });

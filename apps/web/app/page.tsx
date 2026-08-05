@@ -13,18 +13,10 @@ import { ArchiveButton } from "./archive-button";
 import { FilterBar } from "./filter-bar";
 import { MissionTabs } from "./mission-tabs";
 import { NewMissionForm } from "./new-mission-form";
+import { StatusBadge } from "./status-badge";
 import { TelemetryPanel } from "./telemetry-panel";
 
 export const dynamic = "force-dynamic";
-
-const STATUS_STYLES: Record<string, string> = {
-  awaiting_input: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
-  running: "bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200",
-  starting: "bg-neutral-100 text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300",
-  done: "bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-200",
-  failed: "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200",
-  stopped: "bg-neutral-100 text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300",
-};
 
 function asStatus(value: string | undefined) {
   return MISSION_STATUSES.find((status) => status === value);
@@ -121,13 +113,7 @@ export default async function Dashboard({
                     {mission.repo ?? "no repository"}
                   </span>
                 </span>
-                <span
-                  className={`shrink-0 rounded px-2 py-1 text-xs ${
-                    STATUS_STYLES[mission.status] ?? ""
-                  }`}
-                >
-                  {mission.status.replace("_", " ")}
-                </span>
+                <StatusBadge status={mission.status} />
               </Link>
               <ArchiveButton missionId={mission.id} archived={archived} />
             </li>
