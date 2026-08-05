@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import {
   and,
   desc,
@@ -237,6 +238,24 @@ export function appendEvent(
 
     return { seq: event.seq, ts: event.ts, type, payload };
   });
+}
+
+const createdPayload = z.object({ prompt: z.string() });
+
+/**
+ * What the mission was asked to do.
+ *
+ * Kept in the mission.created event rather than on the row, which is where
+ * createMission has always put it. A queued mission needs it back to start,
+ * possibly after a restart, so it is read from there rather than held in memory.
+ */
+export function missionPrompt(db: Db, missionId: string): string | undefined {
+  for (const event of listEvents(db, missionId, 0)) {
+    if (event.type !== "mission.created") continue;
+    const parsed = createdPayload.safeParse(event.payload);
+    if (parsed.success) return parsed.data.prompt;
+  }
+  return undefined;
 }
 
 export function listEvents(db: Db, missionId: string, since: number): StoredEvent[] {

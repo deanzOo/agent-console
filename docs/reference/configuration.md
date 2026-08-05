@@ -74,15 +74,29 @@ are in [ADR 0008](../adr/0008-agent-holds-the-git-token.md).
 Without it, the issues panel is hidden and missions still run — they just cannot reach GitHub, and their work
 stays on the server until you push it from the console.
 
+### How many missions run at once
+
+`max_concurrent_missions` defaults to **2**. A mission is a whole Claude Code
+process, not a request, so this is the setting that decides whether a small box
+stays up — the default was chosen for a two-core VPS after an unbounded one went
+down.
+
+A mission accepted while the cap is reached is **queued**, not refused: it is
+durable, keeps its place, and starts when a slot frees. It has no working tree
+until it starts, so a long queue costs a row each rather than a checkout each.
+
+The queue survives a restart. Recovery brings back what was running first, then
+starts queued missions with whatever room is left.
+
 ## Settings-table only
 
 Set from `/setup` or `/settings`; no environment equivalent.
 
-| Key                               | Default           | Notes                                                                 |
-| --------------------------------- | ----------------- | --------------------------------------------------------------------- |
-| `setup_complete`                  | unset             | Until set, every route redirects to `/setup`.                         |
-| `password_hash`                   | —                 | scrypt, `scrypt:<salt>:<key>`.                                        |
-| `default_base_branch`             | repo default      | Base for new mission branches.                                        |
-| `max_concurrent_missions`         | —                 | Caps simultaneous agent sessions. The practical limit on a small VPS. |
-| `sync_interval_seconds`           | —                 | How often issue and task caches refresh.                              |
-| `git_user_name`, `git_user_email` | host `git config` | Identity for agent commits.                                           |
+| Key                               | Default           | Notes                                                           |
+| --------------------------------- | ----------------- | --------------------------------------------------------------- |
+| `setup_complete`                  | unset             | Until set, every route redirects to `/setup`.                   |
+| `password_hash`                   | —                 | scrypt, `scrypt:<salt>:<key>`.                                  |
+| `default_base_branch`             | repo default      | Base for new mission branches.                                  |
+| `max_concurrent_missions`         | 2                 | How many missions run at once. Beyond it they queue. See below. |
+| `sync_interval_seconds`           | —                 | How often issue and task caches refresh.                        |
+| `git_user_name`, `git_user_email` | host `git config` | Identity for agent commits.                                     |
