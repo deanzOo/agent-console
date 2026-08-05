@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { and, eq } from "drizzle-orm";
 import { promisify } from "node:util";
 import type { Db } from "./db";
 import { asanaCache, issuesCache, repos } from "./schema";
@@ -24,19 +25,34 @@ async function githubJson(token: string, path: string): Promise<unknown> {
   return response.json();
 }
 
+/**
+ * Brings the issue cache in line with what GitHub reports as open.
+ *
+ * Upserting alone left every issue that was ever open in the console forever:
+ * closing one on GitHub did nothing here, because nothing removed it. The cache
+ * mirrors the remote rather than accumulating from it, so each repository's
+ * rows are replaced by exactly what came back for it, and a repository that is
+ * gone from `all` loses its rows entirely.
+ */
 export async function syncIssues(
   db: Db,
   token: string,
-  repoNames: string[],
+  repoSync: RepoSync,
 ): Promise<number> {
+  const visible = new Set(repoSync.all);
   let total = 0;
 
-  for (const repo of repoNames) {
-    const payload = await githubJson(
-      token,
-      `/repos/${repo}/issues?state=open&per_page=50`,
-    );
-    const issues = parseGithubIssues(repo, payload);
+  for (const repo of repoSync.all) {
+    // GitHub already said which repositories have none, so asking the rest is a
+    // request that can only come back empty — but their rows still have to go.
+    const issues = repoSync.withOpenIssues.includes(repo)
+      ? parseGithubIssues(
+          repo,
+          await githubJson(token, `/repos/${repo}/issues?state=open&per_page=50`),
+        )
+      : [];
+
+    const open = new Set(issues.map((issue) => issue.number));
 
     db.transaction((tx) => {
       for (const issue of issues) {
@@ -48,8 +64,29 @@ export async function syncIssues(
           })
           .run();
       }
+
+      const stale = tx
+        .select()
+        .from(issuesCache)
+        .where(eq(issuesCache.repo, repo))
+        .all()
+        .filter((row) => !open.has(row.number));
+
+      for (const row of stale) {
+        tx.delete(issuesCache)
+          .where(and(eq(issuesCache.repo, repo), eq(issuesCache.number, row.number)))
+          .run();
+      }
     });
     total += issues.length;
+  }
+
+  // A repository the token can no longer see keeps nothing here either.
+  for (const row of db.select().from(issuesCache).all()) {
+    if (visible.has(row.repo)) continue;
+    db.delete(issuesCache)
+      .where(and(eq(issuesCache.repo, row.repo), eq(issuesCache.number, row.number)))
+      .run();
   }
 
   return total;

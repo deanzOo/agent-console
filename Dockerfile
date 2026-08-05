@@ -66,7 +66,11 @@ RUN apt-get update \
  && rm -f /tmp/gh.deb \
  && apt-get purge -y curl && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/* \
- && npm install -g npm@latest \
+ # Not npm@latest: npm 12 does not install this package's platform-native
+ # optional dependency, leaving a launcher stub that reports "claude native
+ # binary not installed" and fails every mission at startup. The base image's
+ # npm installs it correctly. This was upgraded to clear advisories in npm's
+ # own bundle, which the image scan no longer looks at.
  && npm install -g @anthropic-ai/claude-code \
  && npm cache clean --force \
  && useradd --system --create-home --uid 10001 agent \
