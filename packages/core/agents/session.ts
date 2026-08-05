@@ -16,6 +16,7 @@ import {
   type NotificationKind,
 } from "../notify";
 import { configuredChannels } from "../notify-channels";
+import { releaseSourcePickup } from "../pickup";
 import { MISSION_STATUS, PROMPT_KIND } from "../schema";
 import { PendingPrompts } from "./pending";
 import type { ApprovalMode, Policy } from "./policy";
@@ -196,6 +197,19 @@ export class MissionSession {
     setStatus(this.#db, this.#missionId, status);
     this.#record("mission.status", error ? { status, error } : { status });
     if (isNotifiable(status)) this.#notify(status);
+    // Done or failed both mean the mission is no longer the one working on
+    // its issue or task — stopped is released separately, from stopMission,
+    // which is the only place that status is ever set.
+    if (status === MISSION_STATUS.DONE || status === MISSION_STATUS.FAILED) {
+      this.#release();
+    }
+  }
+
+  // Fire-and-forget, like #notify: an unreachable GitHub or Asana must never
+  // stall the agent loop that finished.
+  #release(): void {
+    const mission = getMission(this.#db, this.#missionId);
+    if (mission) void releaseSourcePickup(this.#db, mission).catch(() => undefined);
   }
 
   #captureSessionId(message: SDKMessage): void {
