@@ -83,7 +83,11 @@ function withKnowledge(prompt: string, bundlePath: string | undefined): string {
 async function startMission(missionId: string, input: LaunchInput): Promise<void> {
   const db = getDatabase();
   const config = getConfig();
-  const mission = { id: missionId };
+  // The row, not an id in a wrapper: callers here need what the mission is —
+  // its source, its repository — and a stub was only ever enough for the paths
+  // that existed when this was extracted.
+  const mission = getMission(db, missionId);
+  if (!mission) throw new Error(`mission ${missionId} no longer exists`);
 
   // Tells the issue or task an agent has taken it, so another agent — or the
   // operator on another device — does not pick up the same one. Awaited
