@@ -1,0 +1,9 @@
+{
+  // Open Knowledge Format uses top-level headings for body sections - "# Schema",
+  // "# Computation", "# Steps" - so a concept document has several by design.
+  // That is the format's convention, not a mistake in ours.
+  "config": {
+    "extends": "../.markdownlint-cli2.jsonc",
+    "MD025": false,
+  },
+}
