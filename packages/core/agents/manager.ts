@@ -106,8 +106,6 @@ async function startMission(missionId: string, input: LaunchInput): Promise<void
 
     const session = new MissionSession(db, mission.id);
     sessions.set(mission.id, session);
-    releaseSlotWhenFinished(mission.id, session);
-    closeWhenIdle(mission.id, session);
 
     session.start(createSdkDriver(githubToken(db)), {
       missionId: mission.id,
@@ -115,6 +113,11 @@ async function startMission(missionId: string, input: LaunchInput): Promise<void
       cwd,
       resume: getMission(db, mission.id)?.sessionId ?? undefined,
     });
+
+    // After start, never before: the promise these wait on does not exist until
+    // the session has one.
+    releaseSlotWhenFinished(mission.id, session);
+    closeWhenIdle(mission.id, session);
   } catch (error) {
     // The session is registered before it starts, so a throw from start()
     // would otherwise leave a dead one in the map — counted by runningCount()
@@ -238,14 +241,16 @@ function resumeSession(mission: Mission): void {
 
   const session = new MissionSession(db, mission.id);
   sessions.set(mission.id, session);
-  releaseSlotWhenFinished(mission.id, session);
-  closeWhenIdle(mission.id, session);
   session.start(createSdkDriver(githubToken(db)), {
     missionId: mission.id,
     prompt: "Continue where you left off.",
     cwd: mission.worktreePath || config.workspaceRoot,
     resume: mission.sessionId ?? undefined,
   });
+
+  // After start, for the same reason as above.
+  releaseSlotWhenFinished(mission.id, session);
+  closeWhenIdle(mission.id, session);
 }
 
 /**

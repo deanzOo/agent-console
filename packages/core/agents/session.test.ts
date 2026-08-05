@@ -462,6 +462,17 @@ describe("finishing a turn", () => {
     expect(getMission(db, mission.id)?.status).toBe("running");
   });
 
+  // `await undefined` resolves immediately, so a session asked before it starts
+  // would report that it had already finished — which unregistered every
+  // session the instant it was created and broke every approval.
+  it("refuses to answer whether it finished before it has started", async () => {
+    const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
+
+    await expect(new MissionSession(db, mission.id).whenFinished()).rejects.toThrow(
+      /has not started/,
+    );
+  });
+
   // The distinction that leaked: eight processes were alive for two missions
   // the console believed had finished, because a result arrives at the end of
   // every turn and was read as the end of the session.

@@ -44,6 +44,7 @@ export function MissionLive({
   const [events, setEvents] = useState(initialEvents);
   const [prompts, setPrompts] = useState(initialPrompts);
   const [status, setStatus] = useState(mission.status);
+  const [answerError, setAnswerError] = useState<string | undefined>();
   const bottom = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -106,12 +107,32 @@ export function MissionLive({
   }, [events.length]);
 
   async function answer(promptId: string, decision: "allow" | "deny", always = false) {
+    const answered = prompts.find((prompt) => prompt.id === promptId);
     setPrompts((current) => current.filter((prompt) => prompt.id !== promptId));
-    await fetch(`/api/missions/${mission.id}/answer`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ promptId, decision, always }),
-    });
+    setAnswerError(undefined);
+
+    try {
+      const response = await fetch(`/api/missions/${mission.id}/answer`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ promptId, decision, always }),
+      });
+      if (response.ok) return;
+
+      // Taking the question off the screen and dropping the refusal on the
+      // floor is what made a broken approval look like a working one: the
+      // prompt vanished, nothing happened, and it was back on the next visit.
+      const body = await response.json().catch(() => ({}));
+      setAnswerError(
+        Object(body).error === "session_not_running"
+          ? "This mission's session is no longer running, so it cannot be answered."
+          : `Could not answer: ${String(Object(body).error ?? response.status)}`,
+      );
+      if (answered) setPrompts((current) => [...current, answered]);
+    } catch {
+      setAnswerError("Could not reach the server.");
+      if (answered) setPrompts((current) => [...current, answered]);
+    }
   }
 
   return (
@@ -159,6 +180,12 @@ export function MissionLive({
       {/* Pinned to the bottom of the viewport: an approval that only exists at
           the top of a long transcript has to be hunted for, and answering one
           appends more output that moves it further away. */}
+      {answerError && (
+        <p className="rounded border border-red-400 bg-red-50 p-3 text-sm text-red-900 dark:bg-red-950/40 dark:text-red-200">
+          {answerError}
+        </p>
+      )}
+
       {prompts.map((prompt) => (
         <section
           key={prompt.id}
