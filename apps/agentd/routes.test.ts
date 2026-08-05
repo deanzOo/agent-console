@@ -17,6 +17,7 @@ describe("matchRoute", () => {
     ["answer", "POST"],
     ["interrupt", "POST"],
     ["stop", "POST"],
+    ["resume", "POST"],
   ])("recognises %s", (action) => {
     expect(post(`/missions/abc-123/${action}`)).toEqual({
       kind: "mission",

@@ -26,6 +26,36 @@ export type Recovery =
   | { readonly action: "queue"; readonly mission: Mission }
   | { readonly action: "stop"; readonly mission: Mission; readonly reason: string };
 
+export type ManualResume =
+  { readonly ok: true } | { readonly ok: false; readonly reason: string };
+
+/**
+ * Whether an operator may bring a mission back by hand.
+ *
+ * Shares the session and working-tree checks `planRecovery` uses — a resume
+ * with neither would fail in a way that reads as a bug rather than as what it
+ * is. Deliberately absent is `MAX_RESUME_ATTEMPTS`: that counter exists to
+ * stop a boot loop from resuming the same mission forever on its own, and an
+ * operator asking for it once by hand is a different signal that must not be
+ * blocked by it.
+ *
+ * Only a `stopped` mission qualifies. `failed` covers a different kind of
+ * ending — the agent erroring out mid-run — and recovery never leaves a
+ * mission there, so there is nothing for this to reason about.
+ */
+export function canResumeManually(mission: Mission, exists = existsSync): ManualResume {
+  if (mission.status !== MISSION_STATUS.STOPPED) {
+    return { ok: false, reason: "only a stopped mission can be resumed" };
+  }
+  if (!mission.sessionId) {
+    return { ok: false, reason: "it never had a session to resume" };
+  }
+  if (mission.worktreePath && !exists(mission.worktreePath)) {
+    return { ok: false, reason: "its working tree is gone" };
+  }
+  return { ok: true };
+}
+
 function resumeCount(db: Db, missionId: string): number {
   return listEvents(db, missionId, 0).filter(
     (event) => event.type === "mission.resumed",

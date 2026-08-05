@@ -18,6 +18,7 @@ response. Anything that would need HTTP to unit-test belongs in `packages/core` 
 | `/api/missions/[id]/mode`      | POST   | `{ mode: "default" \| "acceptEdits" \| "plan" }`                                | `{ ok }`                      |
 | `/api/missions/[id]/interrupt` | POST   | —                                                                               | `{ ok }`                      |
 | `/api/missions/[id]/stop`      | POST   | —                                                                               | `{ ok }`                      |
+| `/api/missions/[id]/resume`    | POST   | —                                                                               | `{ ok }`                      |
 | `/api/missions/[id]/archive`   | POST   | `{ archived: boolean }`                                                         | `{ ok }`                      |
 | `/api/missions/[id]/workspace` | DELETE | —                                                                               | `{ ok }`                      |
 | `/api/missions/[id]/publish`   | POST   | —                                                                               | `{ url }`                     |
@@ -38,6 +39,12 @@ to push. A pull request that already exists is returned rather than treated as a
 button twice is ordinary.
 
 `workspace` deletes the mission's working tree and refuses while the mission is live.
+
+`resume` restarts a `stopped` mission's session with `resume`, the same way automatic recovery does — including
+recording a `mission.resumed` event, so the transcript reads the same either way. It answers `409` with a
+reason for anything else: a mission that is not `stopped`, one that never had a session, or one whose working
+tree is gone. Unlike recovery, it ignores how many times the mission has already been resumed — an operator
+asking for it by hand is a different signal than a boot loop retrying on its own.
 
 ## Streams
 

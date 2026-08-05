@@ -23,6 +23,7 @@ interface MissionView {
   readonly repo: string | null;
   readonly branch: string | null;
   readonly worktreePath: string | null;
+  readonly sessionId: string | null;
 }
 
 interface SourceView {
@@ -166,6 +167,7 @@ export function MissionLive({
             missionId={mission.id}
             status={status}
             hasWorktree={Boolean(mission.worktreePath)}
+            hasSession={Boolean(mission.sessionId)}
           />
         </div>
       </header>

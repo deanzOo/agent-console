@@ -6,6 +6,7 @@ import { getMission, listEvents, openPrompts } from "@agent-console/core/mission
 import {
   getSession,
   launchMission,
+  resumeMission,
   runningCount,
   stopMission,
 } from "@agent-console/core/agents/manager";
@@ -192,6 +193,18 @@ async function handle(
   if (route.action === "stop") {
     await stopMission(route.id);
     json(response, 200, { ok: true });
+    return;
+  }
+
+  // Resuming, like stopping, must work with no session running — that is
+  // exactly the state a mission recovery gave up on is in.
+  if (route.action === "resume") {
+    const outcome = resumeMission(route.id);
+    json(
+      response,
+      outcome.ok ? 200 : 409,
+      outcome.ok ? { ok: true } : { error: outcome.reason },
+    );
     return;
   }
 

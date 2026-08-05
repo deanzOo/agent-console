@@ -9,13 +9,20 @@ interface Props {
   readonly missionId: string;
   readonly status: string;
   readonly hasWorktree: boolean;
+  readonly hasSession: boolean;
 }
 
-export function MissionActions({ missionId, status, hasWorktree }: Props) {
+export function MissionActions({ missionId, status, hasWorktree, hasSession }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const live = LIVE.includes(status);
+  // Recovery only ever leaves a mission `stopped`, never `failed` — a failed
+  // mission errored out mid-run rather than being declined a resume, so there
+  // is nothing here for a resume to act on. The server is the real judge of
+  // whether the session and working tree are still there; this is only a
+  // hint to avoid offering a button that can only fail.
+  const canResume = status === "stopped" && hasSession && hasWorktree;
 
   async function act(path: string, method: string) {
     setBusy(true);
@@ -40,6 +47,17 @@ export function MissionActions({ missionId, status, hasWorktree }: Props) {
           className="rounded border border-neutral-400 px-2 py-1 text-xs disabled:opacity-50"
         >
           Stop
+        </button>
+      )}
+
+      {canResume && (
+        <button
+          type="button"
+          onClick={() => void act("/resume", "POST")}
+          disabled={busy}
+          className="rounded border border-neutral-400 px-2 py-1 text-xs disabled:opacity-50"
+        >
+          Resume
         </button>
       )}
 

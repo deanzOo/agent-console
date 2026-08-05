@@ -12,6 +12,7 @@ const answerPrompt = vi.fn();
 const client = {
   interruptMission: vi.fn(),
   stopMission: vi.fn(),
+  resumeMission: vi.fn(),
   sayToMission: vi.fn(),
   setMissionMode: vi.fn(),
   answerPrompt: vi.fn(),
@@ -41,6 +42,7 @@ const CASES: Case[] = [
     call: client.interruptMission,
   },
   { name: "stop", load: () => import("./stop/route"), call: client.stopMission },
+  { name: "resume", load: () => import("./resume/route"), call: client.resumeMission },
   {
     name: "say",
     load: () => import("./say/route"),
