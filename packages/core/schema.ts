@@ -4,6 +4,7 @@ import {
   index,
   integer,
   primaryKey,
+  real,
   sqliteTable,
   text,
 } from "drizzle-orm/sqlite-core";
@@ -164,6 +165,26 @@ export const pushSubscriptions = sqliteTable("push_subscriptions", {
   createdAt: text("created_at").notNull().default(now),
 });
 
+// A rolling window, not a full history: retention and dedupe-on-write live
+// in telemetry-history.ts, which owns the interval and cutoff this table
+// itself does not enforce.
+export const hostTelemetrySamples = sqliteTable(
+  "host_telemetry_samples",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    sampledAtMs: integer("sampled_at_ms").notNull(),
+    load1: real("load1").notNull(),
+    cores: integer("cores").notNull(),
+    memoryUsedBytes: integer("memory_used_bytes").notNull(),
+    memoryTotalBytes: integer("memory_total_bytes").notNull(),
+    networkRxBytesPerSec: real("network_rx_bytes_per_sec"),
+    networkTxBytesPerSec: real("network_tx_bytes_per_sec"),
+    diskReadBytesPerSec: real("disk_read_bytes_per_sec"),
+    diskWriteBytesPerSec: real("disk_write_bytes_per_sec"),
+  },
+  (table) => [index("host_telemetry_samples_sampled_at_idx").on(table.sampledAtMs)],
+);
+
 export const settings = sqliteTable(
   "settings",
   {
@@ -180,3 +201,4 @@ export type PendingPrompt = typeof pendingPrompts.$inferSelect;
 export type CachedIssue = typeof issuesCache.$inferSelect;
 export type CachedAsanaTask = typeof asanaCache.$inferSelect;
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type HostTelemetrySample = typeof hostTelemetrySamples.$inferSelect;
