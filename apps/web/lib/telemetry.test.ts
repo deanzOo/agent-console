@@ -27,8 +27,11 @@ const HOST_SAMPLE = {
   sampledAt: "2024-01-01T00:00:00.000Z",
 };
 
+const now = () => 1_700_000_000_000;
+
 // countMissions is mocked, so this is never actually queried — a real
-// database keeps the test honest about the `Db` type without a cast.
+// database keeps the test honest about the `Db` type without a cast, and lets
+// readTelemetry's own recording/reading of history run for real.
 let dir: string;
 let db: Db;
 
@@ -51,21 +54,43 @@ afterEach(() => {
 
 describe("readTelemetry", () => {
   it("reads /proc through the configured path", () => {
-    readTelemetry(db);
+    readTelemetry(db, now);
     expect(createHostTelemetrySampler).toHaveBeenCalledWith("/proc");
   });
 
   it("combines the host sample with how many missions are running", () => {
-    expect(readTelemetry(db)).toEqual({
+    expect(readTelemetry(db, now)).toEqual({
       available: true,
       host: HOST_SAMPLE,
       missionsRunning: 3,
+      history: [
+        {
+          sampledAtMs: now(),
+          load1: 0.5,
+          cores: 2,
+          memoryUsedBytes: 50,
+          memoryTotalBytes: 100,
+          networkRxBytesPerSec: null,
+          networkTxBytesPerSec: null,
+          diskReadBytesPerSec: null,
+          diskWriteBytesPerSec: null,
+        },
+      ],
     });
   });
 
   it("asks only for missions that are running, not starting or waiting", () => {
-    readTelemetry(db);
+    readTelemetry(db, now);
     expect(countMissions).toHaveBeenCalledWith(db, { status: "running" });
+  });
+
+  it("records the sample so a later read can build a history", () => {
+    readTelemetry(db, now);
+    const later = () => now() + 10_000;
+
+    const reading = readTelemetry(db, later);
+    if (!reading.available) throw new Error("expected an available reading");
+    expect(reading.history).toHaveLength(2);
   });
 
   // /proc does not exist on every host this dev-runs on (macOS, an
@@ -76,6 +101,6 @@ describe("readTelemetry", () => {
       throw new Error("ENOENT");
     });
 
-    expect(readTelemetry(db)).toEqual({ available: false });
+    expect(readTelemetry(db, now)).toEqual({ available: false });
   });
 });

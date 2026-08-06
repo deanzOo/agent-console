@@ -25,13 +25,30 @@ const hostSampleSchema = z.object({
   sampledAt: z.string(),
 });
 
+// One rolling-window point behind the current reading — enough for a
+// sparkline beside each figure, per #97. Rate fields are nullable because the
+// first sample after the process starts has nothing to diff a rate from.
+const telemetryHistoryPointSchema = z.object({
+  sampledAtMs: z.number(),
+  load1: z.number(),
+  cores: z.number(),
+  memoryUsedBytes: z.number(),
+  memoryTotalBytes: z.number(),
+  networkRxBytesPerSec: z.number().nullable(),
+  networkTxBytesPerSec: z.number().nullable(),
+  diskReadBytesPerSec: z.number().nullable(),
+  diskWriteBytesPerSec: z.number().nullable(),
+});
+
 export const telemetrySchema = z.discriminatedUnion("available", [
   z.object({
     available: z.literal(true),
     host: hostSampleSchema,
     missionsRunning: z.number(),
+    history: z.array(telemetryHistoryPointSchema),
   }),
   z.object({ available: z.literal(false) }),
 ]);
 
 export type TelemetryReading = z.infer<typeof telemetrySchema>;
+export type TelemetryHistoryPoint = z.infer<typeof telemetryHistoryPointSchema>;
