@@ -6,6 +6,10 @@ import {
   createHostTelemetrySampler,
   type HostTelemetrySampler,
 } from "@agent-console/core/telemetry";
+import {
+  listTelemetryHistory,
+  recordTelemetrySample,
+} from "@agent-console/core/telemetry-history";
 import type { TelemetryReading } from "./telemetry-schema";
 
 export type { TelemetryReading } from "./telemetry-schema";
@@ -27,13 +31,15 @@ function getHostTelemetrySampler(): HostTelemetrySampler {
  * without it — and that is a supported state rather than a bug, so it
  * degrades to "unavailable" instead of taking the dashboard down with it.
  */
-export function readTelemetry(db: Db): TelemetryReading {
+export function readTelemetry(db: Db, now: () => number = Date.now): TelemetryReading {
   try {
     const host = getHostTelemetrySampler().sample();
+    recordTelemetrySample(db, host, now);
     return {
       available: true,
       host,
       missionsRunning: countMissions(db, { status: MISSION_STATUS.RUNNING }),
+      history: listTelemetryHistory(db, now),
     };
   } catch {
     return { available: false };
