@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import type { ApprovalMode } from "./agents/policy";
 import {
   and,
   desc,
@@ -247,6 +248,10 @@ export function recordWorkspace(db: Db, id: string, input: WorkspaceRecord): voi
 
 export function setSessionId(db: Db, id: string, sessionId: string): void {
   db.update(missions).set({ sessionId }).where(eq(missions.id, id)).run();
+}
+
+export function setMissionMode(db: Db, id: string, mode: ApprovalMode): void {
+  db.update(missions).set({ mode }).where(eq(missions.id, id)).run();
 }
 
 // Sequence is allocated from the mission row inside a transaction so two

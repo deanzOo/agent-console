@@ -1,0 +1,1 @@
+ALTER TABLE `missions` ADD `mode` text DEFAULT 'default' NOT NULL;

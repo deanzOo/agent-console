@@ -21,6 +21,7 @@ import {
   listMissions,
   openPrompts,
   recordPrompt,
+  setMissionMode,
   setSessionId,
   setStatus,
 } from "./missions";
@@ -436,6 +437,18 @@ describe("status", () => {
     const mission = newMission();
     setSessionId(db, mission.id, "sess-1");
     expect(getMission(db, mission.id)?.sessionId).toBe("sess-1");
+  });
+});
+
+describe("mode", () => {
+  it("starts a new mission asking by default", () => {
+    expect(newMission().mode).toBe("default");
+  });
+
+  it("updates", () => {
+    const mission = newMission();
+    setMissionMode(db, mission.id, "acceptEdits");
+    expect(getMission(db, mission.id)?.mode).toBe("acceptEdits");
   });
 });
 

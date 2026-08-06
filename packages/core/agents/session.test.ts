@@ -35,6 +35,7 @@ function fakeDriver() {
   let done = false;
   let failure: Error | undefined;
   let canUseTool: CanUseTool | undefined;
+  let policy: Parameters<AgentDriver["start"]>[0]["policy"] | undefined;
   let interrupted = false;
   const said: string[] = [];
   const modes: string[] = [];
@@ -80,6 +81,7 @@ function fakeDriver() {
     driver: {
       start(options) {
         canUseTool = options.canUseTool;
+        policy = options.policy;
         return run;
       },
     } satisfies AgentDriver,
@@ -103,6 +105,10 @@ function fakeDriver() {
     },
     get interrupted() {
       return interrupted;
+    },
+    policy() {
+      if (!policy) throw new Error("session not started");
+      return policy();
     },
   };
 }
@@ -433,6 +439,45 @@ describe("changing permission mode", () => {
   it("refuses on a session that never started", async () => {
     const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
     expect(await new MissionSession(db, mission.id).setMode("plan")).toBe(false);
+  });
+
+  // The half that actually loses work: an operator who told the agent to stop
+  // asking should not have it start asking again after a restart.
+  it("persists the mode so it survives a restart", async () => {
+    const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
+    const fake = fakeDriver();
+    const session = new MissionSession(db, mission.id);
+    session.start(fake.driver, { missionId: mission.id, prompt: "go", cwd: "/tmp" });
+
+    await session.setMode("acceptEdits");
+
+    expect(getMission(db, mission.id)?.mode).toBe("acceptEdits");
+
+    fake.finish();
+    await session.stop();
+  });
+
+  it("restores the persisted mode for the next session on this mission", async () => {
+    const mission = createMission(db, { title: "t", source: "free", prompt: "p" });
+    const first = fakeDriver();
+    const session1 = new MissionSession(db, mission.id);
+    session1.start(first.driver, { missionId: mission.id, prompt: "go", cwd: "/tmp" });
+    await session1.setMode("acceptEdits");
+    first.finish();
+    await session1.stop();
+
+    const second = fakeDriver();
+    const session2 = new MissionSession(db, mission.id);
+    session2.start(second.driver, {
+      missionId: mission.id,
+      prompt: "resume",
+      cwd: "/tmp",
+    });
+
+    expect(second.policy().mode).toBe("acceptEdits");
+
+    second.finish();
+    await session2.stop();
   });
 });
 
