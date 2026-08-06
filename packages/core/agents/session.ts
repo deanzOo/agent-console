@@ -4,6 +4,7 @@ import {
   appendEvent,
   getMission,
   recordPrompt,
+  setMissionMode,
   setSessionId,
   setStatus,
   type MissionStatus,
@@ -19,7 +20,7 @@ import { configuredChannels } from "../notify-channels";
 import { releaseSourcePickup } from "../pickup";
 import { MISSION_STATUS, PROMPT_KIND } from "../schema";
 import { PendingPrompts } from "./pending";
-import type { ApprovalMode, Policy } from "./policy";
+import { DEFAULT_APPROVAL_MODE, type ApprovalMode, type Policy } from "./policy";
 
 export type EventListener = (event: StoredEvent) => void;
 
@@ -62,7 +63,7 @@ export class MissionSession {
   readonly #pending = new PendingPrompts();
   readonly #listeners = new Set<EventListener>();
   #run: AgentRun | undefined;
-  #mode: ApprovalMode = "default";
+  #mode: ApprovalMode;
   // Per mission, and only in memory: a standing "yes" to a shell should not
   // outlive the session the operator granted it in.
   readonly #allowed = new Set<string>();
@@ -71,6 +72,10 @@ export class MissionSession {
   constructor(db: Db, missionId: string) {
     this.#db = db;
     this.#missionId = missionId;
+    // Read back rather than assumed default, so a mission resumed after a
+    // restart keeps the posture the operator chose instead of reverting to
+    // asking about everything again.
+    this.#mode = getMission(db, missionId)?.mode ?? DEFAULT_APPROVAL_MODE;
   }
 
   subscribe(listener: EventListener): () => void {
@@ -150,6 +155,7 @@ export class MissionSession {
     if (!this.#run) return false;
     this.#mode = mode;
     await this.#run.setMode(mode);
+    setMissionMode(this.#db, this.#missionId, mode);
     // Recorded, because a transcript where approvals simply stop appearing is
     // worse than one that says the posture changed and to what.
     this.#record("mission.mode", { mode });

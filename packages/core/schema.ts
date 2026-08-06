@@ -7,6 +7,7 @@ import {
   sqliteTable,
   text,
 } from "drizzle-orm/sqlite-core";
+import { APPROVAL_MODES, DEFAULT_APPROVAL_MODE } from "./agents/policy";
 
 const now = sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`;
 
@@ -64,6 +65,11 @@ export const missions = sqliteTable(
     branch: text("branch"),
     worktreePath: text("worktree_path"),
     sessionId: text("session_id"),
+    // Durable so a resumed session comes back with the posture the operator
+    // chose rather than reverting to asking about everything again.
+    mode: text("mode", { enum: APPROVAL_MODES })
+      .notNull()
+      .default(DEFAULT_APPROVAL_MODE),
     createdAt: text("created_at").notNull().default(now),
     updatedAt: text("updated_at").notNull().default(now),
     lastSeq: integer("last_seq").notNull().default(0),
@@ -75,6 +81,7 @@ export const missions = sqliteTable(
     index("missions_status_idx").on(table.status),
     check("missions_status_valid", oneOf(table.status, MISSION_STATUSES)),
     check("missions_source_valid", oneOf(table.source, MISSION_SOURCES)),
+    check("missions_mode_valid", oneOf(table.mode, APPROVAL_MODES)),
   ],
 );
 

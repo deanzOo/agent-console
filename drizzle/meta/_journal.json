@@ -29,6 +29,20 @@
       "when": 1785926300752,
       "tag": "0003_condemned_nocturne",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1785991657160,
+      "tag": "0004_thin_lightspeed",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1785991665203,
+      "tag": "0005_flowery_arachne",
+      "breakpoints": true
     }
   ]
 }

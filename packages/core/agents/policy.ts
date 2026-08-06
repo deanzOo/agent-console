@@ -12,6 +12,10 @@ export const APPROVAL_MODES = ["default", "acceptEdits", "plan"] as const;
 
 export type ApprovalMode = (typeof APPROVAL_MODES)[number];
 
+// The mission row and a fresh MissionSession both need a starting posture
+// before an operator has chosen one.
+export const DEFAULT_APPROVAL_MODE: ApprovalMode = APPROVAL_MODES[0];
+
 // Reading and inspecting cannot surprise the operator, and stopping for
 // permission on every grep would make the console unusable.
 export const READ_ONLY_TOOLS = [
