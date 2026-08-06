@@ -11,13 +11,14 @@ const MODES = [
 interface Props {
   readonly missionId: string;
   readonly live: boolean;
+  readonly initialMode: string;
 }
 
 // Sits at the bottom, next to where an approval pins: the two things you do to
 // a running agent belong in the same place, under your thumb.
-export function Composer({ missionId, live }: Props) {
+export function Composer({ missionId, live, initialMode }: Props) {
   const [text, setText] = useState("");
-  const [mode, setMode] = useState("default");
+  const [mode, setMode] = useState(initialMode);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 

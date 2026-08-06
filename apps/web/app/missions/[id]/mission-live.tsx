@@ -23,6 +23,7 @@ interface MissionView {
   readonly repo: string | null;
   readonly branch: string | null;
   readonly worktreePath: string | null;
+  readonly mode: string;
 }
 
 interface SourceView {
@@ -233,7 +234,11 @@ export function MissionLive({
         <PublishButton missionId={mission.id} />
       )}
 
-      <Composer missionId={mission.id} live={status !== "failed"} />
+      <Composer
+        missionId={mission.id}
+        live={status !== "failed"}
+        initialMode={mission.mode}
+      />
       <BackToNav />
     </main>
   );

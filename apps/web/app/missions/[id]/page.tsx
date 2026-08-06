@@ -25,6 +25,7 @@ export default async function MissionPage({
         repo: mission.repo,
         branch: mission.branch,
         worktreePath: mission.worktreePath,
+        mode: mission.mode,
       }}
       source={sourceLinkFor(db, mission) ?? null}
       initialEvents={listEvents(db, id, 0)}
