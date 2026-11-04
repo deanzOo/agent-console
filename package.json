@@ -55,7 +55,7 @@
     "jose": "^6.2.7",
     "js-yaml": "^5.2.3",
     "web-push": "^3.6.7",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.1",
